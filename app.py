@@ -4,18 +4,14 @@ import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
 
 from rag.config import KNOWLEDGE_DIR, LLM_MODEL, LLM_PROVIDER, WORKERS
+from rag.index_registry import get_index, reset_index
 from rag.llm import stream_chat
 from rag.loader import iter_files
+from rag.model_registry import get_embed_model
 from rag.monitoring import gpu_metrics
+from rag.orchestrator import execute_search, format_context, plan
 from rag.pipeline import read_and_chunk
-from rag.retriever import format_context, search
-from rag.store import (
-    add_chunks,
-    ensure_ollama,
-    get_collection,
-    get_embed_model,
-    reset_collection,
-)
+from rag.store import add_chunks, ensure_ollama
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -34,7 +30,7 @@ st.set_page_config(
 @st.cache_resource(show_spinner="Starting Ollama...")
 def init():
     ensure_ollama()
-    col = get_collection()
+    col = get_index()
     return col
 
 
@@ -80,7 +76,7 @@ with st.sidebar:
         if not files:
             st.error(f"No files found in `{KNOWLEDGE_DIR}`")
         else:
-            target_col = reset_collection() if force else col
+            target_col = reset_index() if force else col
 
             # ── Phase 1: Parallel read + chunk ──────────────────────
             phase1 = st.progress(0, text="📖 Reading & chunking files…")
@@ -167,7 +163,8 @@ query = st.text_input(
 
 if query:
     with st.spinner("🔍 Searching knowledge base..."):
-        results = search(query, n=n_results, category=category)
+        route = plan(query, category=category, top_k=n_results)
+        results = execute_search(query, route, category=category)
 
     if not results:
         st.warning("No results found.")

@@ -1,9 +1,15 @@
 """Kaizen v1 — FastAPI backend for the React frontend."""
 
 import json
+import logging
 import math
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s  %(message)s",
+)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,18 +17,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from rag.config import KNOWLEDGE_DIR, LLM_MODEL, LLM_PROVIDER, OLLAMA_URL, WORKERS
+from rag.index_registry import get_index, reset_index
 from rag.llm import stream_chat
 from rag.loader import iter_files
+from rag.model_registry import get_embed_model, list_models
 from rag.monitoring import gpu_metrics
+from rag.orchestrator import execute_search, format_context, plan
 from rag.pipeline import read_and_chunk
-from rag.retriever import format_context, search
-from rag.store import (
-    add_chunks,
-    ensure_ollama,
-    get_collection,
-    get_embed_model,
-    reset_collection,
-)
+from rag.store import add_chunks, ensure_ollama
 
 # ---------------------------------------------------------------------------
 # App lifecycle
@@ -32,7 +34,7 @@ from rag.store import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_ollama()
-    get_collection()  # warm ChromaDB
+    get_index()  # warm ChromaDB via index_registry
     yield
 
 
@@ -66,13 +68,14 @@ class IngestRequest(BaseModel):
 
 @app.get("/api/status")
 def status():
-    """System status: chunk count, GPU metrics, system info."""
-    col = get_collection()
+    """System status: chunk count, GPU metrics, models, system info."""
+    col = get_index()
     return {
         "chunks": col.count(),
         "gpu": gpu_metrics(),
         "llm_model": LLM_MODEL,
         "llm_provider": LLM_PROVIDER,
+        "models": list_models(),
         "ollama_url": OLLAMA_URL,
     }
 
@@ -85,7 +88,8 @@ def query(body: QueryRequest):
       - data: {"type":"token","content":"..."}      (streaming tokens)
       - data: {"type":"done"}                       (end)
     """
-    results = search(body.query, n=body.top_k, category=body.category)
+    route = plan(body.query, category=body.category, top_k=body.top_k)
+    results = execute_search(body.query, route, category=body.category)
 
     if not results:
         def no_results():
@@ -135,7 +139,7 @@ def ingest(body: IngestRequest):
     if not files:
         return {"error": f"No files found in {KNOWLEDGE_DIR}"}
 
-    target = reset_collection() if body.force else get_collection()
+    target = reset_index() if body.force else get_index()
 
     # Phase 1: parallel read + chunk
     file_chunks = []
