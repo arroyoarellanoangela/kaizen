@@ -254,8 +254,10 @@ Las siguientes capacidades **no entran en ninguna fase de V2** sin una revisión
 
 | Fase | Estado | Condición de entrada |
 |---|---|---|
-| Pre-V2 cleanup | Pendiente | — (puede empezar cuando V1 esté cerrada) |
-| V2.1 Orchestration | Pendiente | Pre-V2 completado |
+| Pre-V2 cleanup | ✅ Completado | — |
+| Pre-V2.5 Generation polish | ✅ Completado | SYSTEM_PROMPT + upgrade 8B→14B |
+| LLM Provider abstraction | ✅ Completado | `rag/llm.py` — Ollama + OpenAI-compatible APIs |
+| V2.1 Orchestration | ✅ Completado | `model_registry` + `index_registry` + `orchestrator` |
 | V2.2 Second Index | Pendiente | V2.1 + trigger de corpus |
 | V2.3 Second Embedding Model | Pendiente | V2.2 + plateau de calidad documentado |
-| V2.4 LLM Routing | Pendiente | V2.1 + dos casos de uso reales |
+| V2.4 LLM Routing | Pendiente | V2.1 ✅ + dos casos de uso reales |
