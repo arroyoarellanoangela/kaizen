@@ -12,15 +12,8 @@ from typing import Any
 import torch
 from sentence_transformers import CrossEncoder
 
-from .config import TOP_K
+from .config import OVERFETCH_FACTOR, RERANKER_BATCH_SIZE, RERANKER_MODEL, TOP_K
 from .store import get_collection
-
-# ---------------------------------------------------------------------------
-# Reranker config
-# ---------------------------------------------------------------------------
-
-RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-OVERFETCH_FACTOR = 4  # retrieve N * factor, rerank down to N
 
 _reranker: CrossEncoder | None = None
 
@@ -91,7 +84,7 @@ def search(
         try:
             reranker = get_reranker()
             pairs = [[query, c["text"]] for c in candidates]
-            scores = reranker.predict(pairs, batch_size=32, show_progress_bar=False)
+            scores = reranker.predict(pairs, batch_size=RERANKER_BATCH_SIZE, show_progress_bar=False)
 
             for c, score in zip(candidates, scores):
                 c["score"] = round(float(score), 4)

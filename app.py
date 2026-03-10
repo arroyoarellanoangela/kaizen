@@ -3,9 +3,10 @@
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
 
-from rag.chunker import chunk_text
-from rag.config import CHUNK_OVERLAP, CHUNK_SIZE, KNOWLEDGE_DIR, OLLAMA_URL
-from rag.loader import iter_files, read_file
+from rag.config import KNOWLEDGE_DIR, LLM_MODEL, OLLAMA_URL, SYSTEM_PROMPT, WORKERS
+from rag.loader import iter_files
+from rag.monitoring import gpu_metrics
+from rag.pipeline import read_and_chunk
 from rag.retriever import format_context, search
 from rag.store import (
     add_chunks,
@@ -14,43 +15,6 @@ from rag.store import (
     get_embed_model,
     reset_collection,
 )
-
-# ---------------------------------------------------------------------------
-# GPU monitoring helpers (pynvml)
-# ---------------------------------------------------------------------------
-
-_PYNVML_OK = False
-try:
-    import pynvml
-    pynvml.nvmlInit()
-    _PYNVML_OK = True
-except Exception:
-    pass
-
-
-def _gpu_metrics() -> dict | None:
-    """Return GPU metrics dict or None if pynvml unavailable."""
-    if not _PYNVML_OK:
-        return None
-    try:
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        name = pynvml.nvmlDeviceGetName(handle)
-        if isinstance(name, bytes):
-            name = name.decode("utf-8")
-        mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-        temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-        return {
-            "name": name,
-            "vram_used_gb": mem.used / (1024 ** 3),
-            "vram_total_gb": mem.total / (1024 ** 3),
-            "vram_pct": mem.used / mem.total * 100,
-            "gpu_util": util.gpu,
-            "mem_util": util.memory,
-            "temp_c": temp,
-        }
-    except Exception:
-        return None
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -84,18 +48,6 @@ except Exception:
 
 
 # ---------------------------------------------------------------------------
-# Helpers — parallel read + chunk
-# ---------------------------------------------------------------------------
-
-def _read_and_chunk(path):
-    """Read a file and return its chunks + metadata (runs in thread)."""
-    text = read_file(path)
-    if not text.strip():
-        return path, []
-    return path, chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
-
-
-# ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
@@ -105,7 +57,7 @@ with st.sidebar:
     st.divider()
 
     # ── GPU metrics dashboard ──────────────────────────────────────────
-    gpu = _gpu_metrics()
+    gpu = gpu_metrics()
     if gpu:
         st.caption(f"🖥️ **{gpu['name']}**")
         col1, col2 = st.columns(2)
@@ -134,8 +86,8 @@ with st.sidebar:
             file_chunks: list[tuple] = []
             total_chunk_count = 0
 
-            with ThreadPoolExecutor(max_workers=8) as pool:
-                futures = {pool.submit(_read_and_chunk, f): i for i, f in enumerate(files)}
+            with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+                futures = {pool.submit(read_and_chunk, f): i for i, f in enumerate(files)}
                 done = 0
                 for future in futures:
                     result = future.result()
@@ -203,15 +155,6 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-
-LLM_MODEL = "qwen3:8b"
-
-SYSTEM_PROMPT = """You are a knowledgeable assistant. Answer the user's question using ONLY the provided context from their knowledge base. 
-- Synthesize information from all relevant sources into a clear, complete answer.
-- Use markdown formatting for readability.
-- If the context doesn't contain enough information, say so honestly.
-- Cite sources using [source_name] when referencing specific documents.
-- Answer in the same language as the question."""
 
 st.title("Ask your knowledge base")
 

@@ -284,23 +284,6 @@ function App() {
                       {msg.content || (isLoading ? '...' : '')}
                     </Markdown>
                   </div>
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="sources-list">
-                      {msg.sources.map((src, i) => (
-                        <details key={i} className="source-item">
-                          <summary>
-                            <span className="source-path">
-                              {src.category}/{src.source}
-                            </span>
-                            <span className="source-score">
-                              {(src.score * 100).toFixed(0)}%
-                            </span>
-                          </summary>
-                          <div className="source-text">{src.text}</div>
-                        </details>
-                      ))}
-                    </div>
-                  )}
                 </>
               ) : (
                 msg.content

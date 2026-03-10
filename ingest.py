@@ -7,45 +7,41 @@ Usage:
     python ingest.py --force   # wipe collection and re-index everything
 """
 
+import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
 from tqdm import tqdm
 
-from rag.chunker import chunk_text
-from rag.config import CHUNK_OVERLAP, CHUNK_SIZE, KNOWLEDGE_DIR
-from rag.loader import iter_files, read_file
+from rag.config import KNOWLEDGE_DIR, WORKERS
+from rag.loader import iter_files
+from rag.pipeline import read_and_chunk
 from rag.store import add_chunks, ensure_ollama, get_collection, get_embed_model, reset_collection
 
-
-def _read_and_chunk(path):
-    """Read a file and return its chunks (runs in thread)."""
-    text = read_file(path)
-    if not text.strip():
-        return path, []
-    return path, chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s  %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def main(force: bool = False) -> None:
     ensure_ollama()
-    print(f"Knowledge dir : {KNOWLEDGE_DIR}")
+    logger.info("Knowledge dir: %s", KNOWLEDGE_DIR)
 
     if not KNOWLEDGE_DIR.exists():
-        print(f"[error] Not found: {KNOWLEDGE_DIR}")
+        logger.error("Not found: %s", KNOWLEDGE_DIR)
         sys.exit(1)
 
     col = reset_collection() if force else get_collection()
     if force:
-        print("[info] Collection cleared — full re-index.")
+        logger.info("Collection cleared — full re-index.")
 
     # ── Phase 1: Parallel read + chunk ────────────────────────────────
     files = list(iter_files(KNOWLEDGE_DIR))
-    print(f"\n[Phase 1] Reading & chunking {len(files)} files (parallel)...")
+    logger.info("[Phase 1] Reading & chunking %d files (parallel)...", len(files))
     file_chunks = []
     total_chunk_count = 0
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for path, chunks in tqdm(
-            pool.map(_read_and_chunk, files),
+            pool.map(read_and_chunk, files),
             total=len(files),
             desc="Reading",
             unit="file",
@@ -53,15 +49,15 @@ def main(force: bool = False) -> None:
             file_chunks.append((path, chunks))
             total_chunk_count += len(chunks)
 
-    print(f"   -> {total_chunk_count} chunks from {len(files)} files\n")
+    logger.info("   -> %d chunks from %d files", total_chunk_count, len(files))
 
     # ── Phase 2: Pre-load embedding model ─────────────────────────────
-    print("[Phase 2] Loading embedding model to GPU...")
+    logger.info("[Phase 2] Loading embedding model to GPU...")
     get_embed_model()
-    print("   -> Model ready\n")
+    logger.info("   -> Model ready")
 
     # ── Phase 3: Embed + index ────────────────────────────────────────
-    print(f"[Phase 3] Embedding & indexing...")
+    logger.info("[Phase 3] Embedding & indexing...")
     total_added = total_skipped = total_files = 0
 
     pbar = tqdm(file_chunks, desc="Indexing", unit="file")
@@ -76,11 +72,11 @@ def main(force: bool = False) -> None:
 
         pbar.set_postfix(added=total_added, skipped=total_skipped, refresh=True)
 
-    print(f"\n{'─'*60}")
-    print(f"Files processed : {total_files}")
-    print(f"Chunks added    : {total_added}")
-    print(f"Chunks skipped  : {total_skipped}")
-    print(f"Total in DB     : {col.count()}")
+    logger.info("─" * 60)
+    logger.info("Files processed : %d", total_files)
+    logger.info("Chunks added    : %d", total_added)
+    logger.info("Chunks skipped  : %d", total_skipped)
+    logger.info("Total in DB     : %d", col.count())
 
 
 if __name__ == "__main__":

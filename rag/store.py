@@ -1,17 +1,19 @@
 """ChromaDB vector store — embed with sentence-transformers (direct GPU)."""
 
 import hashlib
+import logging
 import subprocess
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import chromadb
 import requests
 from sentence_transformers import SentenceTransformer
 
-from .config import CHROMA_DIR, COLLECTION_NAME, EMBED_MODEL, OLLAMA_URL
+from .config import ADD_BATCH_SIZE, CHROMA_DIR, COLLECTION_NAME, EMBED_BATCH, EMBED_MODEL, OLLAMA_URL
 
 
 # ---------------------------------------------------------------------------
@@ -26,7 +28,7 @@ def ensure_ollama(timeout: int = 30) -> None:
     except Exception:
         pass
 
-    print("[ollama] Not running — starting ollama serve...")
+    logger.info("Ollama not running — starting ollama serve...")
     subprocess.Popen(
         ["ollama", "serve"],
         stdout=subprocess.DEVNULL,
@@ -37,7 +39,7 @@ def ensure_ollama(timeout: int = 30) -> None:
     while time.time() < deadline:
         try:
             requests.get(OLLAMA_URL, timeout=2)
-            print("[ollama] Ready.")
+            logger.info("Ollama ready.")
             return
         except Exception:
             time.sleep(0.5)
@@ -50,10 +52,6 @@ def ensure_ollama(timeout: int = 30) -> None:
 # ---------------------------------------------------------------------------
 
 _model: SentenceTransformer | None = None
-
-ADD_BATCH_SIZE = 500   # chunks per ChromaDB add() call
-EMBED_BATCH = 256      # optimal batch (validated by benchmark sweep)
-
 
 def get_embed_model() -> SentenceTransformer:
     """Lazy-load the embedding model.

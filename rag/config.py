@@ -30,3 +30,24 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "80"))
 
 # Retrieval
 TOP_K = int(os.getenv("TOP_K", "5"))
+
+# Reranker
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+OVERFETCH_FACTOR = int(os.getenv("OVERFETCH_FACTOR", "4"))
+RERANKER_BATCH_SIZE = int(os.getenv("RERANKER_BATCH_SIZE", "32"))
+
+# Embedding batches
+EMBED_BATCH = int(os.getenv("EMBED_BATCH", "256"))
+ADD_BATCH_SIZE = int(os.getenv("ADD_BATCH_SIZE", "500"))
+
+# LLM
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:8b")
+SYSTEM_PROMPT = """You are a knowledgeable assistant. Answer the user's question using ONLY the provided context from their knowledge base.
+- Synthesize information from all relevant sources into a clear, complete answer.
+- Use markdown formatting for readability.
+- If the context doesn't contain enough information, say so honestly.
+- Cite sources using [source_name] when referencing specific documents.
+- Answer in the same language as the question."""
+
+# Concurrency
+WORKERS = int(os.getenv("WORKERS", "8"))

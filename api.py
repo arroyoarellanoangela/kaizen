@@ -2,10 +2,8 @@
 
 import json
 import math
-import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any
 
 import requests as req
 from fastapi import FastAPI
@@ -13,9 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from rag.chunker import chunk_text
-from rag.config import CHUNK_OVERLAP, CHUNK_SIZE, KNOWLEDGE_DIR, OLLAMA_URL
-from rag.loader import iter_files, read_file
+from rag.config import KNOWLEDGE_DIR, LLM_MODEL, OLLAMA_URL, SYSTEM_PROMPT, WORKERS
+from rag.loader import iter_files
+from rag.monitoring import gpu_metrics
+from rag.pipeline import read_and_chunk
 from rag.retriever import format_context, search
 from rag.store import (
     add_chunks,
@@ -24,43 +23,6 @@ from rag.store import (
     get_embed_model,
     reset_collection,
 )
-
-# ---------------------------------------------------------------------------
-# GPU monitoring (pynvml)
-# ---------------------------------------------------------------------------
-
-_PYNVML_OK = False
-try:
-    import pynvml
-
-    pynvml.nvmlInit()
-    _PYNVML_OK = True
-except Exception:
-    pass
-
-
-def _gpu_metrics() -> dict[str, Any] | None:
-    if not _PYNVML_OK:
-        return None
-    try:
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        name = pynvml.nvmlDeviceGetName(handle)
-        if isinstance(name, bytes):
-            name = name.decode("utf-8")
-        mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-        temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-        return {
-            "name": name,
-            "temp_c": temp,
-            "gpu_util": util.gpu,
-            "vram_used_gb": round(mem.used / (1024**3), 2),
-            "vram_total_gb": round(mem.total / (1024**3), 2),
-            "vram_pct": round(mem.used / mem.total * 100, 1),
-        }
-    except Exception:
-        return None
-
 
 # ---------------------------------------------------------------------------
 # App lifecycle
@@ -83,16 +45,8 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Models
+# Request models
 # ---------------------------------------------------------------------------
-
-LLM_MODEL = "qwen3:8b"
-SYSTEM_PROMPT = """You are a knowledgeable assistant. Answer the user's question using ONLY the provided context from their knowledge base.
-- Synthesize information from all relevant sources into a clear, complete answer.
-- Use markdown formatting for readability.
-- If the context doesn't contain enough information, say so honestly.
-- Cite sources using [source_name] when referencing specific documents.
-- Answer in the same language as the question."""
 
 
 class QueryRequest(BaseModel):
@@ -116,7 +70,7 @@ def status():
     col = get_collection()
     return {
         "chunks": col.count(),
-        "gpu": _gpu_metrics(),
+        "gpu": gpu_metrics(),
         "llm_model": LLM_MODEL,
         "ollama_url": OLLAMA_URL,
     }
@@ -194,13 +148,6 @@ def query(body: QueryRequest):
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
-def _read_and_chunk(path):
-    text = read_file(path)
-    if not text.strip():
-        return path, []
-    return path, chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
-
-
 @app.post("/api/ingest")
 def ingest(body: IngestRequest):
     """Ingest knowledge base. Blocking call — returns when done."""
@@ -212,8 +159,8 @@ def ingest(body: IngestRequest):
 
     # Phase 1: parallel read + chunk
     file_chunks = []
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        for result in pool.map(_read_and_chunk, files):
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for result in pool.map(read_and_chunk, files):
             file_chunks.append(result)
 
     # Phase 2: ensure model loaded
