@@ -41,7 +41,7 @@ EMBED_BATCH = int(os.getenv("EMBED_BATCH", "256"))
 ADD_BATCH_SIZE = int(os.getenv("ADD_BATCH_SIZE", "500"))
 
 # LLM
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:8b")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:14b")
 SYSTEM_PROMPT = """You are a technical knowledge assistant. Answer ONLY from the provided context.
 
 STRICT RULES:
