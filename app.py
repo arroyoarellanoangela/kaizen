@@ -3,7 +3,8 @@
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
 
-from rag.config import KNOWLEDGE_DIR, LLM_MODEL, OLLAMA_URL, SYSTEM_PROMPT, WORKERS
+from rag.config import KNOWLEDGE_DIR, LLM_MODEL, LLM_PROVIDER, WORKERS
+from rag.llm import stream_chat
 from rag.loader import iter_files
 from rag.monitoring import gpu_metrics
 from rag.pipeline import read_and_chunk
@@ -177,30 +178,7 @@ if query:
         # Stream LLM response
         st.subheader("💡 Answer")
 
-        def stream_response():
-            import requests as req
-            resp = req.post(
-                f"{OLLAMA_URL}/api/chat",
-                json={
-                    "model": LLM_MODEL,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"},
-                    ],
-                    "stream": True,
-                },
-                stream=True,
-                timeout=120,
-            )
-            resp.raise_for_status()
-            for line in resp.iter_lines():
-                if line:
-                    import json
-                    data = json.loads(line)
-                    if "message" in data and "content" in data["message"]:
-                        yield data["message"]["content"]
-
-        st.write_stream(stream_response())
+        st.write_stream(stream_chat(query, context))
 
         # Show source chunks as collapsible references
         st.divider()

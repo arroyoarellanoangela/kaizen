@@ -41,7 +41,10 @@ EMBED_BATCH = int(os.getenv("EMBED_BATCH", "256"))
 ADD_BATCH_SIZE = int(os.getenv("ADD_BATCH_SIZE", "500"))
 
 # LLM
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")  # "ollama" or "openai"
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:14b")
+LLM_API_URL = os.getenv("LLM_API_URL", "")  # e.g. https://api.deepseek.com/v1
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 SYSTEM_PROMPT = """You are a technical knowledge assistant. Answer ONLY from the provided context.
 
 STRICT RULES:
