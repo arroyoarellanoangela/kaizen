@@ -5,13 +5,13 @@ import math
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-import requests as req
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from rag.config import KNOWLEDGE_DIR, LLM_MODEL, OLLAMA_URL, SYSTEM_PROMPT, WORKERS
+from rag.config import KNOWLEDGE_DIR, LLM_MODEL, LLM_PROVIDER, OLLAMA_URL, WORKERS
+from rag.llm import stream_chat
 from rag.loader import iter_files
 from rag.monitoring import gpu_metrics
 from rag.pipeline import read_and_chunk
@@ -72,6 +72,7 @@ def status():
         "chunks": col.count(),
         "gpu": gpu_metrics(),
         "llm_model": LLM_MODEL,
+        "llm_provider": LLM_PROVIDER,
         "ollama_url": OLLAMA_URL,
     }
 
@@ -115,31 +116,10 @@ def query(body: QueryRequest):
         # Send sources first
         yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
 
-        # Stream LLM response
+        # Stream LLM response via provider abstraction
         try:
-            resp = req.post(
-                f"{OLLAMA_URL}/api/chat",
-                json={
-                    "model": LLM_MODEL,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {
-                            "role": "user",
-                            "content": f"Context:\n{context}\n\nQuestion: {body.query}",
-                        },
-                    ],
-                    "stream": True,
-                },
-                stream=True,
-                timeout=120,
-            )
-            resp.raise_for_status()
-            for line in resp.iter_lines():
-                if line:
-                    data = json.loads(line)
-                    if "message" in data and "content" in data["message"]:
-                        token = data["message"]["content"]
-                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+            for token in stream_chat(body.query, context):
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'token', 'content': f'[LLM error: {e}]'})}\n\n"
 
