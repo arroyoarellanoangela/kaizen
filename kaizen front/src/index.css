@@ -1,0 +1,661 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&family=Noto+Sans+JP:wght@100;200;300;400&family=Space+Grotesk:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg-pure: #ffffff;
+  --bg-offwhite: #fafafa;
+  --bg-panel: #f5f5f5;
+
+  --ink-dark: #111111;
+  --ink-mid: #444444;
+  --ink-light: #888888;
+  --ink-pale: #cccccc;
+
+  --accent-red: #c1272d;
+  --accent-amber: #d4920b;
+  --accent-green: #2d8a4e;
+
+  --border-delicate: #ebebeb;
+
+  --bg-color: var(--bg-pure);
+  --text-primary: var(--ink-dark);
+  --text-secondary: var(--ink-mid);
+  --accent-color: var(--accent-red);
+
+  --user-msg-bg: #f9f9f9;
+  --bot-msg-bg: var(--bg-pure);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+#root {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 300;
+  margin: 0;
+  color: var(--ink-dark);
+}
+
+.layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* ================================================================
+   SIDEBAR
+   ================================================================ */
+
+.sidebar {
+  width: 300px;
+  min-width: 300px;
+  background-color: var(--bg-offwhite);
+  border-right: 1px solid var(--border-delicate);
+  display: flex;
+  flex-direction: column;
+  padding: 1.75rem 1.5rem 1.25rem;
+  z-index: 10;
+  position: relative;
+  overflow: hidden;
+  justify-content: space-between;
+}
+
+.sidebar-header {
+  margin-bottom: 1.25rem;
+}
+
+.brand-logo {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dark);
+  text-decoration: none;
+}
+
+.brand-logo em {
+  font-style: normal;
+  color: var(--accent-red);
+}
+
+.brand-kanji {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 7rem;
+  font-weight: 100;
+  color: rgba(0, 0, 0, 0.03);
+  line-height: 1;
+  position: absolute;
+  bottom: -1.5rem;
+  right: -0.5rem;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- Sections --- */
+
+.metrics-section {
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.metrics-title {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--ink-light);
+  margin-bottom: 0.6rem;
+  font-weight: 500;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border-delicate);
+}
+
+.metric-group {
+  margin-bottom: 0.6rem;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.2rem;
+}
+
+.metric-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.metric-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--ink-dark);
+}
+
+.metric-value.highlight {
+  color: var(--accent-red);
+}
+
+/* --- Status dot --- */
+
+.status-value {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.online {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px rgba(45, 138, 78, 0.5);
+  animation: pulse-dot 2.5s ease-in-out infinite;
+}
+
+.status-dot.offline {
+  background: var(--accent-red);
+  box-shadow: 0 0 6px rgba(193, 39, 45, 0.4);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* --- GPU --- */
+
+.gpu-device {
+  font-size: 0.78rem !important;
+  color: var(--ink-mid) !important;
+}
+
+.gpu-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gpu-stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.15rem;
+}
+
+.gpu-stat-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--ink-dark);
+}
+
+.gpu-stat-value.temp-warm {
+  color: var(--accent-amber);
+}
+
+.gpu-stat-value.temp-hot {
+  color: var(--accent-red);
+}
+
+/* --- Progress bars --- */
+
+.progress-bg {
+  width: 100%;
+  height: 3px;
+  background: var(--border-delicate);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--ink-mid);
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+.progress-fill.warn {
+  background: var(--accent-amber);
+}
+
+.progress-fill.critical {
+  background: var(--accent-red);
+}
+
+/* --- Controls --- */
+
+.control-label {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.sidebar-range {
+  width: 100%;
+  appearance: none;
+  height: 3px;
+  background: var(--border-delicate);
+  outline: none;
+  margin: 0.25rem 0;
+  cursor: pointer;
+}
+
+.sidebar-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--ink-mid);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.sidebar-range::-webkit-slider-thumb:hover {
+  background: var(--accent-red);
+}
+
+.sidebar-input {
+  width: 100%;
+  background: var(--bg-pure);
+  border: 1px solid var(--border-delicate);
+  color: var(--ink-dark);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.78rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.sidebar-input:focus {
+  border-color: var(--ink-light);
+}
+
+.sidebar-input::placeholder {
+  color: var(--ink-pale);
+}
+
+.sidebar-btn {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--border-delicate);
+  color: var(--ink-mid);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 400;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.sidebar-btn:hover {
+  border-color: var(--ink-mid);
+  color: var(--ink-dark);
+}
+
+.sidebar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Ingest toast --- */
+
+.ingest-toast {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.72rem;
+  font-family: 'Space Grotesk', sans-serif;
+  border-radius: 2px;
+  animation: fadeIn 0.3s ease;
+}
+
+.ingest-toast.ok {
+  background: rgba(45, 138, 78, 0.08);
+  color: var(--accent-green);
+  border: 1px solid rgba(45, 138, 78, 0.2);
+}
+
+.ingest-toast.err {
+  background: rgba(193, 39, 45, 0.08);
+  color: var(--accent-red);
+  border: 1px solid rgba(193, 39, 45, 0.2);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ================================================================
+   MAIN CHAT AREA
+   ================================================================ */
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background-color: var(--bg-pure);
+}
+
+.chat-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* ================================================================
+   MESSAGES
+   ================================================================ */
+
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+  line-height: 1.8;
+  font-size: 0.95rem;
+  animation: fadeUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+  align-self: flex-end;
+  background-color: var(--user-msg-bg);
+  padding: 1.5rem 2rem;
+  border-radius: 2px;
+  color: var(--ink-dark);
+  border: 1px solid var(--border-delicate);
+}
+
+.message.bot {
+  align-self: flex-start;
+  background-color: transparent;
+  padding: 0 1rem;
+  color: var(--ink-dark);
+  border-left: 2px solid var(--ink-pale);
+  width: 100%;
+  max-width: 100%;
+}
+
+.message.bot::before {
+  content: '\6539\5584';
+  position: absolute;
+  top: 0;
+  left: -2.5rem;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1rem;
+  color: var(--accent-red);
+  opacity: 0.8;
+}
+
+/* --- Markdown --- */
+
+.message.bot h1,
+.message.bot h2,
+.message.bot h3 {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 1.2rem 0 0.4rem;
+  color: var(--ink-dark);
+}
+
+.message.bot h3 {
+  font-size: 0.9rem;
+}
+
+.message.bot p {
+  margin: 0.4rem 0;
+}
+
+.message.bot ul,
+.message.bot ol {
+  margin: 0.4rem 0;
+  padding-left: 1.4rem;
+}
+
+.message.bot li {
+  margin-bottom: 0.3rem;
+}
+
+.message.bot strong {
+  font-weight: 500;
+  color: var(--ink-dark);
+}
+
+.message.bot code {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 0.85em;
+  background: var(--bg-panel);
+  padding: 0.15rem 0.4rem;
+  border-radius: 2px;
+}
+
+.message.bot pre {
+  background: var(--bg-panel);
+  padding: 1rem;
+  border-radius: 2px;
+  overflow-x: auto;
+  margin: 0.6rem 0;
+  max-width: 100%;
+}
+
+.message.bot pre code {
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+
+/* --- Tables --- */
+
+.message.bot table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  display: block;
+  overflow-x: auto;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.message.bot th,
+.message.bot td {
+  border: 1px solid var(--border-delicate);
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.message.bot th {
+  background-color: var(--bg-offwhite);
+  font-weight: 500;
+  color: var(--ink-dark);
+}
+
+/* ================================================================
+   INPUT
+   ================================================================ */
+
+.input-container {
+  padding: 2rem 4rem;
+  background: var(--bg-pure);
+  border-top: 1px solid var(--border-delicate);
+}
+
+.input-box {
+  display: flex;
+  background: var(--bg-offwhite);
+  border: 1px solid var(--border-delicate);
+  transition: all 0.4s ease;
+  max-width: 850px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.input-box:focus-within {
+  border-color: var(--ink-light);
+  background: var(--bg-pure);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02);
+}
+
+.input-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--ink-dark);
+  padding: 1.25rem 1.5rem;
+  font-size: 0.95rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  outline: none;
+  letter-spacing: 0.02em;
+}
+
+.input-box input::placeholder {
+  color: var(--ink-pale);
+  font-weight: 300;
+}
+
+.input-box button {
+  background: transparent;
+  color: var(--ink-mid);
+  border: none;
+  border-left: 1px solid var(--border-delicate);
+  padding: 0 2rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.4s;
+}
+
+.input-box button:hover {
+  color: var(--accent-red);
+}
+
+.input-box button:active {
+  transform: scale(0.98);
+}
+
+/* ================================================================
+   SOURCES (collapsible, under bot messages)
+   ================================================================ */
+
+.sources-list {
+  margin-top: 1rem;
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.source-item {
+  border: none;
+}
+
+.source-item summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--ink-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  list-style: none;
+  transition: color 0.2s;
+}
+
+.source-item summary:hover {
+  color: var(--ink-mid);
+}
+
+.source-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.source-item summary::before {
+  content: '+';
+  margin-right: 0.5rem;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--ink-pale);
+  transition: color 0.2s;
+}
+
+.source-item[open] summary::before {
+  content: '\2212';
+  color: var(--accent-red);
+}
+
+.source-path {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+
+.source-score {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 400;
+  color: var(--ink-pale);
+}
+
+.source-text {
+  font-size: 0.76rem;
+  color: var(--ink-light);
+  line-height: 1.6;
+  margin: 0.4rem 0;
+  padding: 0.7rem;
+  background: var(--bg-panel);
+  border-radius: 2px;
+  border-left: 2px solid var(--border-delicate);
+}

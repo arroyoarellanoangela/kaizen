@@ -1,0 +1,19 @@
+[project]
+name = "kaizen-v1"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb>=0.5.0",
+    "pymupdf>=1.24.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "streamlit>=1.40.0",
+    "sentence-transformers>=3.0.0",
+    "einops>=0.7.0",
+    "pynvml>=11.5.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]

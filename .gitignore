@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Environment
+.env
+
+# Data (ChromaDB vectors — regenerable via ingest)
+data/
+
+# Benchmarks raw data (regenerable)
+benchmark_raw.json
+benchmark_reranker_raw.json
+
+# Frontend
+kaizen front/node_modules/
+kaizen front/dist/
+kaizen front/.claude/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Branding assets (heavy binaries)
+Manifesto/
+
+# Claude
+.claude/
