@@ -8,14 +8,19 @@ Usage:
     python query.py --cat data-engineering "..."  # filter by category
 """
 
+import logging
 import sys
 
-from rag.retriever import format_context, search
-from rag.store import ensure_ollama, get_collection
+from rag.index_registry import get_index
+from rag.orchestrator import execute_search, format_context, plan
+from rag.store import ensure_ollama
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s  %(message)s")
 
 
 def run_query(query: str, category: str | None = None) -> None:
-    results = search(query, category=category)
+    route = plan(query, category=category)
+    results = execute_search(query, route, category=category)
     print(f"\nQuery : {query}")
     if category:
         print(f"Filter: category={category}")
@@ -26,7 +31,7 @@ def run_query(query: str, category: str | None = None) -> None:
 
 def main() -> None:
     ensure_ollama()
-    col = get_collection()
+    col = get_index()
     count = col.count()
 
     if count == 0:

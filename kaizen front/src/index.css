@@ -161,6 +161,11 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent-red);
 }
 
+.provider-badge {
+  font-size: 0.78rem !important;
+  color: var(--ink-mid) !important;
+}
+
 /* --- Status dot --- */
 
 .status-value {
@@ -593,11 +598,23 @@ h1, h2, h3, h4, h5, h6 {
    ================================================================ */
 
 .sources-list {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
   padding-left: 0;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  border-top: 1px solid var(--border-delicate);
+  padding-top: 0.75rem;
+}
+
+.sources-header {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--ink-light);
+  margin-bottom: 0.3rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 400;
 }
 
 .source-item {

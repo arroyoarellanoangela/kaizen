@@ -14,9 +14,11 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 from rag.config import KNOWLEDGE_DIR, WORKERS
+from rag.index_registry import get_index, reset_index
 from rag.loader import iter_files
+from rag.model_registry import get_embed_model
 from rag.pipeline import read_and_chunk
-from rag.store import add_chunks, ensure_ollama, get_collection, get_embed_model, reset_collection
+from rag.store import add_chunks, ensure_ollama
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,7 +32,7 @@ def main(force: bool = False) -> None:
         logger.error("Not found: %s", KNOWLEDGE_DIR)
         sys.exit(1)
 
-    col = reset_collection() if force else get_collection()
+    col = reset_index() if force else get_index()
     if force:
         logger.info("Collection cleared — full re-index.")
 

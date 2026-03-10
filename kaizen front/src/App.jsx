@@ -155,6 +155,12 @@ function App() {
               <span className="metric-value">{status?.llm_model || '—'}</span>
             </div>
             <div className="metric-row">
+              <span className="metric-label">Provider</span>
+              <span className="metric-value provider-badge">
+                {status?.provider_label || status?.llm_provider || '—'}
+              </span>
+            </div>
+            <div className="metric-row">
               <span className="metric-label">Pipeline</span>
               <span className="metric-value">FP16 Dual-Stage</span>
             </div>
@@ -284,6 +290,22 @@ function App() {
                       {msg.content || (isLoading ? '...' : '')}
                     </Markdown>
                   </div>
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="sources-list">
+                      <div className="sources-header">
+                        {msg.sources.length} source{msg.sources.length !== 1 ? 's' : ''} used
+                      </div>
+                      {msg.sources.map((src, i) => (
+                        <details key={i} className="source-item">
+                          <summary>
+                            <span className="source-path">{src.category}/{src.source}</span>
+                            <span className="source-score">{Math.round(src.score * 100)}%</span>
+                          </summary>
+                          <div className="source-text">{src.text}</div>
+                        </details>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : (
                 msg.content

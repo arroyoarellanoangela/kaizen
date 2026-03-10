@@ -91,6 +91,9 @@ class STEmbedFn(chromadb.EmbeddingFunction):
 # ---------------------------------------------------------------------------
 
 def get_collection() -> chromadb.Collection:
+    """DEPRECATED: Use index_registry.get_index() instead.
+    Kept for backward compatibility with benchmark scripts."""
+    logger.warning("get_collection() is deprecated — use index_registry.get_index()")
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
@@ -100,6 +103,9 @@ def get_collection() -> chromadb.Collection:
 
 
 def reset_collection() -> chromadb.Collection:
+    """DEPRECATED: Use index_registry.reset_index() instead.
+    Kept for backward compatibility with benchmark scripts."""
+    logger.warning("reset_collection() is deprecated — use index_registry.reset_index()")
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
     try:
         client.delete_collection(COLLECTION_NAME)

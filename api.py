@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from rag.config import KNOWLEDGE_DIR, LLM_MODEL, LLM_PROVIDER, OLLAMA_URL, WORKERS
+from rag.config import KNOWLEDGE_DIR, LLM_API_URL, LLM_MODEL, LLM_PROVIDER, OLLAMA_URL, WORKERS
 from rag.index_registry import get_index, reset_index
 from rag.llm import stream_chat
 from rag.loader import iter_files
@@ -70,11 +70,27 @@ class IngestRequest(BaseModel):
 def status():
     """System status: chunk count, GPU metrics, models, system info."""
     col = get_index()
+    # Derive a human-friendly provider label
+    if LLM_PROVIDER == "ollama":
+        provider_label = "Ollama (local)"
+    elif LLM_API_URL:
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(LLM_API_URL).hostname or ""
+            # groq.com → Groq, deepseek.com → DeepSeek, etc.
+            domain = host.replace("api.", "").split(".")[0].capitalize()
+            provider_label = domain
+        except Exception:
+            provider_label = "Cloud API"
+    else:
+        provider_label = LLM_PROVIDER
+
     return {
         "chunks": col.count(),
         "gpu": gpu_metrics(),
         "llm_model": LLM_MODEL,
         "llm_provider": LLM_PROVIDER,
+        "provider_label": provider_label,
         "models": list_models(),
         "ollama_url": OLLAMA_URL,
     }
