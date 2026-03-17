@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ Suyven RAG Engine
+# Suyven RAG Engine
 
 **The knowledge base that adapts to anything.**
 
@@ -290,6 +290,6 @@ stream_chat(query, context, system_prompt, ...) → Generator[str]
 
 *The base layer. Everything else is built on top of this.*
 
-[hello@suyven.com](mailto:hello@suyven.com)
+[angela@suyven.com](mailto:angela@suyven.com)
 
 </div>
