@@ -1,10 +1,19 @@
 [project]
 name = "suyven-rag"
 version = "0.1.0"
-description = "GPU-first RAG engine — the knowledge base that adapts to anything."
+description = "GPU-first RAG engine with cross-encoder reranking and quality validation. One engine, any domain."
 requires-python = ">=3.12"
 license = "MIT"
+readme = "README.md"
 authors = [{ name = "Angela Arroyo Arellano", email = "angela@suyven.com" }]
+keywords = ["rag", "ai", "gpu", "retrieval", "llm", "cuda", "embeddings", "reranking"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
 dependencies = [
     "chromadb>=1.5",
     "sentence-transformers>=5.0",
@@ -20,6 +29,10 @@ dependencies = [
     "einops>=0.7.0",
 ]
 
+[project.urls]
+Homepage = "https://suyven.com"
+Repository = "https://github.com/arroyoarellanoangela/Henko-"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
@@ -29,8 +42,8 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
