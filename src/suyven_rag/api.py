@@ -6,27 +6,48 @@ import math
 import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from pathlib import Path as _Path
 
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from suyven_rag.rag.agents import (
+    prepare_agent_context,
+)
+from suyven_rag.rag.config import (
+    FALLBACK_MODEL,
+    FALLBACK_PROVIDER,
+    KNOWLEDGE_DIR,
+    LLM_API_URL,
+    LLM_MODEL,
+    LLM_PROVIDER,
+    OLLAMA_URL,
+    WORKERS,
+)
+from suyven_rag.rag.domain_registry import (
+    create_domain,
+    delete_domain,
+    get_domain,
+    get_domain_prompt,
+    list_domains,
+    update_domain,
+)
+from suyven_rag.rag.gap_tracker import analyze_gaps, load_query_log
+from suyven_rag.rag.index_registry import get_index, register_index, reset_index
+from suyven_rag.rag.loader import iter_files
+from suyven_rag.rag.model_registry import get_embed_model, list_models
+from suyven_rag.rag.monitoring import gpu_metrics
 from suyven_rag.rag.observability import (
     RequestIdFilter,
     configure_logging,
     create_request_middleware,
     metrics,
 )
-
-# Structured JSON logging in production (LOG_FORMAT=json), plain text in dev
-_log_format = os.getenv("LOG_FORMAT", "text").strip().lower()
-configure_logging(json_logs=(_log_format == "json"))
-# Inject request_id into all log records
-logging.getLogger().addFilter(RequestIdFilter())
-
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, StreamingResponse
-from pydantic import BaseModel
-
+from suyven_rag.rag.pipeline import read_and_chunk
 from suyven_rag.rag.security import (
-    AUTH_ENABLED,
     CORS_ORIGINS,
     rate_limiter,
     require_api_key,
@@ -37,19 +58,13 @@ from suyven_rag.rag.security import (
     validate_slug,
     validate_top_k,
 )
-
-from suyven_rag.rag.agents import EvaluatorAgent, GeneratorAgent, ReACTRetrieverAgent, RetrieverAgent, RouterAgent, prepare_agent_context
-from suyven_rag.rag.observability import get_request_id
-from suyven_rag.rag.config import FALLBACK_MODEL, FALLBACK_PROVIDER, KNOWLEDGE_DIR, LLM_API_URL, LLM_MODEL, LLM_PROVIDER, OLLAMA_URL, WORKERS
-from suyven_rag.rag.domain_registry import create_domain, delete_domain, get_domain, get_domain_prompt, list_domains, update_domain
-from suyven_rag.rag.eval import new_query_id
-from suyven_rag.rag.gap_tracker import analyze_gaps, load_query_log
-from suyven_rag.rag.index_registry import get_index, register_index, reset_index
-from suyven_rag.rag.loader import iter_files
-from suyven_rag.rag.model_registry import get_embed_model, list_models
-from suyven_rag.rag.monitoring import gpu_metrics
-from suyven_rag.rag.pipeline import read_and_chunk
 from suyven_rag.rag.store import add_chunks, ensure_ollama
+
+# Structured JSON logging in production (LOG_FORMAT=json), plain text in dev
+_log_format = os.getenv("LOG_FORMAT", "text").strip().lower()
+configure_logging(json_logs=(_log_format == "json"))
+# Inject request_id into all log records
+logging.getLogger().addFilter(RequestIdFilter())
 
 # ---------------------------------------------------------------------------
 # App lifecycle
@@ -72,7 +87,6 @@ app.add_middleware(
 )
 
 # Request tracing middleware — adds X-Request-ID, duration logging, metrics
-from starlette.middleware.base import BaseHTTPMiddleware
 app.add_middleware(BaseHTTPMiddleware, dispatch=create_request_middleware(metrics))
 
 # ---------------------------------------------------------------------------
@@ -192,6 +206,7 @@ def prometheus_metrics():
 def gaps(since_days: int | None = None, top: int = 20, api_key: str = Depends(require_api_key)):
     """Knowledge gap analysis — recurring retrieval failures."""
     import dataclasses
+
     entries = load_query_log(since_days=since_days)
     if not entries:
         return {"total_queries": 0, "gaps": [], "message": "No query log data yet"}
@@ -209,6 +224,7 @@ def status(api_key: str = Depends(require_api_key)):
     elif LLM_API_URL:
         try:
             from urllib.parse import urlparse
+
             host = urlparse(LLM_API_URL).hostname or ""
             # groq.com → Groq, deepseek.com → DeepSeek, etc.
             domain = host.replace("api.", "").split(".")[0].capitalize()
@@ -337,7 +353,9 @@ def query(body: QueryRequest, api_key: str = Depends(require_api_key)):
                 metrics.inc("suyven_eval_flags_total", labels={"flag": flag})
             logging.getLogger(__name__).info(
                 "[eval] query_id=%s flags=%s query=%s",
-                ctx.query_id, ctx.eval_flags, body.query[:60],
+                ctx.query_id,
+                ctx.eval_flags,
+                body.query[:60],
             )
 
     return StreamingResponse(stream(), media_type="text/event-stream")
@@ -388,6 +406,7 @@ def ingest(body: IngestRequest, api_key: str = Depends(require_api_key)):
 def create_domain_endpoint(body: DomainCreateRequest, api_key: str = Depends(require_api_key)):
     """Create a new knowledge domain with isolated vector space."""
     import dataclasses
+
     rate_limiter.check(api_key)
     body.name = validate_domain_name(body.name)
     body.description = sanitize_text(body.description, max_length=1000)
@@ -415,6 +434,7 @@ def create_domain_endpoint(body: DomainCreateRequest, api_key: str = Depends(req
 def list_domains_endpoint(api_key: str = Depends(require_api_key)):
     """List all registered domains."""
     import dataclasses
+
     domains = list_domains()
     result = []
     for d in domains:
@@ -433,6 +453,7 @@ def list_domains_endpoint(api_key: str = Depends(require_api_key)):
 def get_domain_endpoint(slug: str, api_key: str = Depends(require_api_key)):
     """Get domain details including chunk count."""
     import dataclasses
+
     try:
         config = get_domain(slug)
         info = dataclasses.asdict(config)
@@ -447,9 +468,12 @@ def get_domain_endpoint(slug: str, api_key: str = Depends(require_api_key)):
 
 
 @app.put("/api/domains/{slug}")
-def update_domain_endpoint(slug: str, body: DomainUpdateRequest, api_key: str = Depends(require_api_key)):
+def update_domain_endpoint(
+    slug: str, body: DomainUpdateRequest, api_key: str = Depends(require_api_key)
+):
     """Update domain configuration."""
     import dataclasses
+
     try:
         kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
         config = update_domain(slug, **kwargs)
@@ -577,8 +601,7 @@ def query_domain(slug: str, body: QueryRequest, api_key: str = Depends(require_a
             retriever.execute(ctx)
 
     sources = [
-        {"source": r["source"], "category": r["category"], "score": r["score"]}
-        for r in ctx.results
+        {"source": r["source"], "category": r["category"], "score": r["score"]} for r in ctx.results
     ]
 
     def stream():
@@ -587,8 +610,9 @@ def query_domain(slug: str, body: QueryRequest, api_key: str = Depends(require_a
         yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'route': {'mode': mode, 'reason': reason}, 'domain': slug})}\n\n"
 
         # Override system prompt for this domain
-        from suyven_rag.rag.llm import stream_chat
         import time
+
+        from suyven_rag.rag.llm import stream_chat
 
         t0 = time.time()
         context = ctx.context_text
@@ -623,7 +647,9 @@ class DomainFinetuneRequest(BaseModel):
 
 
 @app.post("/api/domains/{slug}/finetune")
-def finetune_domain(slug: str, body: DomainFinetuneRequest, api_key: str = Depends(require_api_key)):
+def finetune_domain(
+    slug: str, body: DomainFinetuneRequest, api_key: str = Depends(require_api_key)
+):
     """Fine-tune the embedding model for a domain.
 
     Generates training pairs from the domain's corpus, trains LoRA adapters,
@@ -661,8 +687,6 @@ def finetune_domain(slug: str, body: DomainFinetuneRequest, api_key: str = Depen
 # ---------------------------------------------------------------------------
 # Static frontend (Docker production mode)
 # ---------------------------------------------------------------------------
-
-from pathlib import Path as _Path
 
 _static_dir = _Path(__file__).parent / "static"
 if _static_dir.is_dir() and (_static_dir / "index.html").exists():

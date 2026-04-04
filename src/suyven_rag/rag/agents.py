@@ -24,9 +24,10 @@ import hashlib
 import logging
 import re
 import time
+from collections.abc import Generator
 from dataclasses import dataclass, field
+from datetime import UTC
 from statistics import mean as _mean
-from typing import Generator
 
 from .config import (
     FALLBACK_API_KEY,
@@ -38,15 +39,15 @@ from .config import (
     TOP_K,
 )
 from .eval import (
+    RERANKER_FLOOR,
+    RERANKER_WEAK_MEAN,
     QueryEvalRecord,
     compute_flags,
     detect_insufficient,
     log_eval,
     new_query_id,
-    RERANKER_FLOOR,
-    RERANKER_WEAK_MEAN,
 )
-from .orchestrator import execute_search, expand_query, format_context, plan
+from .orchestrator import execute_search, format_context, plan
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +110,13 @@ def classify_complexity(query: str) -> str:
     words = query.split()
     n_words = len(words)
     n_questions = query.count("?")
-    has_conjunction = bool(re.search(r"\b(and|or|but|also|ademas|tambien|y|o)\b", query, re.IGNORECASE))
+    has_conjunction = bool(
+        re.search(r"\b(and|or|but|also|ademas|tambien|y|o)\b", query, re.IGNORECASE)
+    )
     has_semicolon = ";" in query
-    has_comparison = bool(re.search(r"\b(compare|vs|versus|diferencia|difference)\b", query, re.IGNORECASE))
+    has_comparison = bool(
+        re.search(r"\b(compare|vs|versus|diferencia|difference)\b", query, re.IGNORECASE)
+    )
 
     score = 0
     if n_words > 20:
@@ -187,7 +192,12 @@ class RouterAgent:
         if ctx.attempt > 1 and ctx.retry_strategy:
             ctx.strategy = ctx.retry_strategy
             # If evaluator recommended clearing category
-            if ctx.strategy == "dense" and ctx.attempt > 1 and ctx.retry_reason and "no_category" in ctx.retry_reason:
+            if (
+                ctx.strategy == "dense"
+                and ctx.attempt > 1
+                and ctx.retry_reason
+                and "no_category" in ctx.retry_reason
+            ):
                 ctx.category = None
         elif ctx.category:
             ctx.strategy = "category_filtered"
@@ -200,19 +210,25 @@ class RouterAgent:
         tk = ctx.top_k * 2 if ctx.strategy == "hybrid" else ctx.top_k
         ctx.route = plan(ctx.query, category=ctx.category, top_k=tk)
 
-        ctx.agent_trace.append({
-            "agent": self.name,
-            "action": "route",
-            "attempt": ctx.attempt,
-            "strategy": ctx.strategy,
-            "complexity": ctx.complexity,
-            "mode": ctx.route.mode,
-            "duration_ms": round((time.time() - t0) * 1000, 1),
-        })
+        ctx.agent_trace.append(
+            {
+                "agent": self.name,
+                "action": "route",
+                "attempt": ctx.attempt,
+                "strategy": ctx.strategy,
+                "complexity": ctx.complexity,
+                "mode": ctx.route.mode,
+                "duration_ms": round((time.time() - t0) * 1000, 1),
+            }
+        )
 
         logger.info(
             "[%s] attempt=%d strategy=%s complexity=%s mode=%s",
-            self.name, ctx.attempt, ctx.strategy, ctx.complexity, ctx.route.mode,
+            self.name,
+            ctx.attempt,
+            ctx.strategy,
+            ctx.complexity,
+            ctx.route.mode,
         )
         return ctx
 
@@ -236,7 +252,7 @@ class RetrieverAgent:
             more = execute_search(ctx.query, ctx.route, category=None)
             results = _merge_and_dedup(results, more, ctx.top_k)
         elif ctx.strategy == "hybrid" and len(results) > ctx.top_k:
-            results = results[:ctx.top_k]
+            results = results[: ctx.top_k]
 
         ctx.results = results
         ctx.context_text = format_context(results)
@@ -245,20 +261,25 @@ class RetrieverAgent:
         ctx.retrieval_quality = assess_quality(ctx.reranker_scores)
         ctx.t_retrieval = time.time() - ctx.t_start
 
-        ctx.agent_trace.append({
-            "agent": self.name,
-            "action": "retrieve",
-            "attempt": ctx.attempt,
-            "strategy": ctx.strategy,
-            "num_results": len(results),
-            "quality": ctx.retrieval_quality,
-            "mean_score": round(_mean(ctx.reranker_scores), 4) if ctx.reranker_scores else None,
-            "duration_ms": round((time.time() - t0) * 1000, 1),
-        })
+        ctx.agent_trace.append(
+            {
+                "agent": self.name,
+                "action": "retrieve",
+                "attempt": ctx.attempt,
+                "strategy": ctx.strategy,
+                "num_results": len(results),
+                "quality": ctx.retrieval_quality,
+                "mean_score": round(_mean(ctx.reranker_scores), 4) if ctx.reranker_scores else None,
+                "duration_ms": round((time.time() - t0) * 1000, 1),
+            }
+        )
 
         logger.info(
             "[%s] attempt=%d results=%d quality=%s",
-            self.name, ctx.attempt, len(results), ctx.retrieval_quality,
+            self.name,
+            ctx.attempt,
+            len(results),
+            ctx.retrieval_quality,
         )
         return ctx
 
@@ -355,7 +376,11 @@ class ReACTRetrieverAgent:
         return execute_search(query, route, category=category)
 
     def _tool_entity_search(
-        self, entities: list[str], route, category: str | None, top_k: int,
+        self,
+        entities: list[str],
+        route,
+        category: str | None,
+        top_k: int,
     ) -> list[dict]:
         """Tool 2: Entity-focused search — search for each entity independently."""
         all_results = []
@@ -370,7 +395,11 @@ class ReACTRetrieverAgent:
         return all_results
 
     def _tool_sub_query(
-        self, sub_queries: list[str], route, category: str | None, top_k: int,
+        self,
+        sub_queries: list[str],
+        route,
+        category: str | None,
+        top_k: int,
     ) -> list[dict]:
         """Tool 3: Sub-query search — search each decomposed query independently."""
         all_results = []
@@ -385,8 +414,8 @@ class ReACTRetrieverAgent:
 
     def _tool_chunk_read(self, results: list[dict], route) -> list[dict]:
         """Tool 4: Adjacent chunk read — expand top results with neighboring chunks."""
-        from .orchestrator import _fetch_adjacent_chunks
         from .index_registry import get_index
+        from .orchestrator import _fetch_adjacent_chunks
 
         col = get_index(route.indexes[0])
         return _fetch_adjacent_chunks(col, results[:3], window=1)
@@ -409,35 +438,45 @@ class ReACTRetrieverAgent:
         entities = extract_query_entities(ctx.query)
         if entities and intermediate_quality in ("weak", "failed"):
             entity_results = self._tool_entity_search(
-                entities, ctx.route, ctx.category, ctx.top_k,
+                entities,
+                ctx.route,
+                ctx.category,
+                ctx.top_k,
             )
             all_candidates.extend(entity_results)
-            tools_used.append({
-                "tool": "entity_search",
-                "entities": entities,
-                "results": len(entity_results),
-            })
+            tools_used.append(
+                {
+                    "tool": "entity_search",
+                    "entities": entities,
+                    "results": len(entity_results),
+                }
+            )
 
         # ---- Step 3: Query decomposition (if complex) ----
         if ctx.complexity == "complex":
             sub_queries = decompose_query(ctx.query)
             if sub_queries:
                 sub_results = self._tool_sub_query(
-                    sub_queries, ctx.route, ctx.category, ctx.top_k,
+                    sub_queries,
+                    ctx.route,
+                    ctx.category,
+                    ctx.top_k,
                 )
                 all_candidates.extend(sub_results)
-                tools_used.append({
-                    "tool": "sub_query",
-                    "sub_queries": sub_queries,
-                    "results": len(sub_results),
-                })
+                tools_used.append(
+                    {
+                        "tool": "sub_query",
+                        "sub_queries": sub_queries,
+                        "results": len(sub_results),
+                    }
+                )
 
         # ---- Merge & deduplicate all candidates ----
         if len(tools_used) > 1:
             # Multiple tools used — merge via score-based dedup
             merged = _merge_and_dedup(all_candidates, [], ctx.top_k)
         else:
-            merged = all_candidates[:ctx.top_k]
+            merged = all_candidates[: ctx.top_k]
 
         # ---- Step 4: Chunk read for context expansion (if quality is good enough) ----
         final_scores = [r["score"] for r in merged]
@@ -462,19 +501,21 @@ class ReACTRetrieverAgent:
         ctx.retrieval_quality = assess_quality(ctx.reranker_scores)
         ctx.t_retrieval = time.time() - ctx.t_start
 
-        ctx.agent_trace.append({
-            "agent": self.name,
-            "action": "react_retrieve",
-            "attempt": ctx.attempt,
-            "strategy": ctx.strategy,
-            "tools_used": tools_used,
-            "num_tools": len(tools_used),
-            "num_results": len(merged),
-            "quality": ctx.retrieval_quality,
-            "mean_score": round(_mean(ctx.reranker_scores), 4) if ctx.reranker_scores else None,
-            "entities_found": entities,
-            "duration_ms": round((time.time() - t0) * 1000, 1),
-        })
+        ctx.agent_trace.append(
+            {
+                "agent": self.name,
+                "action": "react_retrieve",
+                "attempt": ctx.attempt,
+                "strategy": ctx.strategy,
+                "tools_used": tools_used,
+                "num_tools": len(tools_used),
+                "num_results": len(merged),
+                "quality": ctx.retrieval_quality,
+                "mean_score": round(_mean(ctx.reranker_scores), 4) if ctx.reranker_scores else None,
+                "entities_found": entities,
+                "duration_ms": round((time.time() - t0) * 1000, 1),
+            }
+        )
 
         logger.info(
             "[%s] attempt=%d tools=%s results=%d quality=%s",
@@ -550,22 +591,27 @@ class GeneratorAgent:
         ctx.llm_said_insufficient = detect_insufficient(ctx.full_response)
         ctx.t_llm = time.time() - t0
 
-        ctx.agent_trace.append({
-            "agent": self.name,
-            "action": "generate_fallback" if is_fallback else "generate",
-            "attempt": ctx.attempt,
-            "quality_prompt": quality,
-            "fallback": is_fallback,
-            "fallback_model": FALLBACK_MODEL if is_fallback else None,
-            "response_length": len(ctx.full_response),
-            "insufficient": ctx.llm_said_insufficient,
-            "duration_ms": round((time.time() - t0) * 1000, 1),
-        })
+        ctx.agent_trace.append(
+            {
+                "agent": self.name,
+                "action": "generate_fallback" if is_fallback else "generate",
+                "attempt": ctx.attempt,
+                "quality_prompt": quality,
+                "fallback": is_fallback,
+                "fallback_model": FALLBACK_MODEL if is_fallback else None,
+                "response_length": len(ctx.full_response),
+                "insufficient": ctx.llm_said_insufficient,
+                "duration_ms": round((time.time() - t0) * 1000, 1),
+            }
+        )
 
         logger.info(
             "[%s] attempt=%d chars=%d insufficient=%s fallback=%s",
-            self.name, ctx.attempt, len(ctx.full_response),
-            ctx.llm_said_insufficient, is_fallback,
+            self.name,
+            ctx.attempt,
+            len(ctx.full_response),
+            ctx.llm_said_insufficient,
+            is_fallback,
         )
         return ctx
 
@@ -589,17 +635,19 @@ class GeneratorAgent:
         ctx.llm_said_insufficient = detect_insufficient(ctx.full_response)
         ctx.t_llm = time.time() - t0
 
-        ctx.agent_trace.append({
-            "agent": self.name,
-            "action": "generate_fallback" if is_fallback else "generate",
-            "attempt": ctx.attempt,
-            "quality_prompt": quality,
-            "fallback": is_fallback,
-            "fallback_model": FALLBACK_MODEL if is_fallback else None,
-            "response_length": len(ctx.full_response),
-            "insufficient": ctx.llm_said_insufficient,
-            "duration_ms": round(ctx.t_llm * 1000, 1),
-        })
+        ctx.agent_trace.append(
+            {
+                "agent": self.name,
+                "action": "generate_fallback" if is_fallback else "generate",
+                "attempt": ctx.attempt,
+                "quality_prompt": quality,
+                "fallback": is_fallback,
+                "fallback_model": FALLBACK_MODEL if is_fallback else None,
+                "response_length": len(ctx.full_response),
+                "insufficient": ctx.llm_said_insufficient,
+                "duration_ms": round(ctx.t_llm * 1000, 1),
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -615,11 +663,11 @@ class EvaluatorAgent:
     role = "evaluator"
 
     def _build_eval_record(self, ctx: AgentContext) -> QueryEvalRecord:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         scores = ctx.reranker_scores
         return QueryEvalRecord(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             query_id=ctx.query_id,
             query=ctx.query,
             category_filter=ctx.category,
@@ -675,19 +723,24 @@ class EvaluatorAgent:
         # Always log
         log_eval(record)
 
-        ctx.agent_trace.append({
-            "agent": self.name,
-            "action": "evaluate",
-            "attempt": ctx.attempt,
-            "flags": flags,
-            "should_retry": ctx.should_retry,
-            "retry_reason": ctx.retry_reason if ctx.should_retry else "",
-            "duration_ms": round((time.time() - t0) * 1000, 1),
-        })
+        ctx.agent_trace.append(
+            {
+                "agent": self.name,
+                "action": "evaluate",
+                "attempt": ctx.attempt,
+                "flags": flags,
+                "should_retry": ctx.should_retry,
+                "retry_reason": ctx.retry_reason if ctx.should_retry else "",
+                "duration_ms": round((time.time() - t0) * 1000, 1),
+            }
+        )
 
         logger.info(
             "[%s] attempt=%d flags=%s retry=%s",
-            self.name, ctx.attempt, flags, ctx.should_retry,
+            self.name,
+            ctx.attempt,
+            flags,
+            ctx.should_retry,
         )
         return ctx
 
@@ -753,7 +806,13 @@ def prepare_agent_context(
     top_k: int = TOP_K,
     query_id: str | None = None,
     use_react: bool = False,
-) -> tuple[AgentContext, RouterAgent, "RetrieverAgent | ReACTRetrieverAgent", GeneratorAgent, EvaluatorAgent]:
+) -> tuple[
+    AgentContext,
+    RouterAgent,
+    "RetrieverAgent | ReACTRetrieverAgent",
+    GeneratorAgent,
+    EvaluatorAgent,
+]:
     """Create context and agents for SSE streaming (split flow).
 
     Usage in api.py:

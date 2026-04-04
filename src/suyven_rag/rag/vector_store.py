@@ -99,12 +99,15 @@ def find_key_files(tree: list[dict], max_files: int = 15) -> list[str]:
             files.append(pattern)
 
     py_files = sorted(
-        [item["path"] for item in tree
-         if item["type"] == "blob"
-         and item["path"].endswith(".py")
-         and item.get("size", 0) < 50000
-         and not item["path"].startswith("test")
-         and "__pycache__" not in item["path"]],
+        [
+            item["path"]
+            for item in tree
+            if item["type"] == "blob"
+            and item["path"].endswith(".py")
+            and item.get("size", 0) < 50000
+            and not item["path"].startswith("test")
+            and "__pycache__" not in item["path"]
+        ],
         key=lambda p: (
             0 if any(kw in p.lower() for kw in ["train", "lora", "config", "model", "eval"]) else 1,
             len(p),
@@ -167,8 +170,8 @@ def clean_for_embedding(text: str) -> str:
             cleaned.append(line)
 
     result = "\n".join(cleaned)
-    result = re.sub(r'!\[.*?\]\(.*?\)', '', result)
-    result = re.sub(r'\n{4,}', '\n\n\n', result)
+    result = re.sub(r"!\[.*?\]\(.*?\)", "", result)
+    result = re.sub(r"\n{4,}", "\n\n\n", result)
     return result.strip()
 
 
@@ -184,13 +187,15 @@ def fetch_repo_knowledge(url: str, delay: float = 1.0) -> list[dict]:
     for path in key_files:
         content = fetch_github_file(owner, repo, path)
         if content and len(content.strip()) > 100:
-            docs.append({
-                "path": path,
-                "content": content,
-                "repo": f"{owner}/{repo}",
-                "url": url,
-                "category": categorize_file(path),
-            })
+            docs.append(
+                {
+                    "path": path,
+                    "content": content,
+                    "repo": f"{owner}/{repo}",
+                    "url": url,
+                    "category": categorize_file(path),
+                }
+            )
             logger.info("  Fetched: %s (%d chars)", path, len(content))
         time.sleep(delay)
 
@@ -217,13 +222,15 @@ def save_knowledge_local(docs: list[dict]) -> Path:
     for doc in docs:
         key = (doc["repo"], doc["path"])
         if key not in seen:
-            existing.append({
-                "repo": doc["repo"],
-                "path": doc["path"],
-                "url": doc["url"],
-                "category": doc["category"],
-                "chars": len(doc["content"]),
-            })
+            existing.append(
+                {
+                    "repo": doc["repo"],
+                    "path": doc["path"],
+                    "url": doc["url"],
+                    "category": doc["category"],
+                    "chars": len(doc["content"]),
+                }
+            )
             seen.add(key)
 
     manifest.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -254,13 +261,15 @@ def ingest_to_chromadb(docs: list[dict]) -> tuple[int, int]:
             cid = f"gh_{hashlib.md5((doc['repo'] + doc['path'] + str(i) + chunk[:200]).encode()).hexdigest()[:12]}"
             ids.append(cid)
             documents.append(chunk)
-            metadatas.append({
-                "category": f"github-{doc['category']}",
-                "subcategory": doc["repo"],
-                "source": f"github/{doc['repo']}/{doc['path']}",
-                "file_type": doc["path"].split(".")[-1] if "." in doc["path"] else "md",
-                "chunk_index": str(i),
-            })
+            metadatas.append(
+                {
+                    "category": f"github-{doc['category']}",
+                    "subcategory": doc["repo"],
+                    "source": f"github/{doc['repo']}/{doc['path']}",
+                    "file_type": doc["path"].split(".")[-1] if "." in doc["path"] else "md",
+                    "chunk_index": str(i),
+                }
+            )
 
         try:
             existing = set(collection.get(ids=ids)["ids"])
@@ -272,8 +281,8 @@ def ingest_to_chromadb(docs: list[dict]) -> tuple[int, int]:
             total_skipped += len(ids)
             continue
 
-        new_docs = [d for i, d in zip(ids, documents) if i not in existing]
-        new_metas = [m for i, m in zip(ids, metadatas) if i not in existing]
+        new_docs = [d for i, d in zip(ids, documents, strict=False) if i not in existing]
+        new_metas = [m for i, m in zip(ids, metadatas, strict=False) if i not in existing]
 
         embeddings = embed_batch(new_docs)
         batch_size = 100
@@ -288,8 +297,13 @@ def ingest_to_chromadb(docs: list[dict]) -> tuple[int, int]:
 
         total_added += len(new_ids)
         total_skipped += len(existing)
-        logger.info("  %s/%s: +%d chunks (skipped %d)",
-                     doc["repo"], doc["path"], len(new_ids), len(existing))
+        logger.info(
+            "  %s/%s: +%d chunks (skipped %d)",
+            doc["repo"],
+            doc["path"],
+            len(new_ids),
+            len(existing),
+        )
 
     logger.info("Ingestion complete: %d added, %d skipped", total_added, total_skipped)
     return total_added, total_skipped
@@ -306,11 +320,13 @@ def _generate_questions_gemini(chunk: str, api_key: str, n: int = 2) -> list[str
             },
             json={
                 "model": "gemini-2.5-flash",
-                "messages": [{
-                    "role": "user",
-                    "content": f"Generate {n} specific technical questions this text answers. "
-                               f"Return ONLY the questions, one per line, no numbering.\n\n{chunk[:1500]}",
-                }],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": f"Generate {n} specific technical questions this text answers. "
+                        f"Return ONLY the questions, one per line, no numbering.\n\n{chunk[:1500]}",
+                    }
+                ],
                 "temperature": 0.7,
                 "max_tokens": 200,
             },
@@ -318,7 +334,9 @@ def _generate_questions_gemini(chunk: str, api_key: str, n: int = 2) -> list[str
         )
         if resp.status_code == 200:
             content = resp.json()["choices"][0]["message"]["content"]
-            questions = [q.strip() for q in content.strip().split("\n") if q.strip() and len(q.strip()) > 10]
+            questions = [
+                q.strip() for q in content.strip().split("\n") if q.strip() and len(q.strip()) > 10
+            ]
             return questions[:n]
     except Exception as e:
         logger.debug("Gemini question gen failed: %s", e)
@@ -343,24 +361,28 @@ def generate_training_pairs(docs: list[dict], output: Path = PAIRS_OUTPUT) -> in
             if gemini_key:
                 questions = _generate_questions_gemini(chunk, gemini_key)
                 for q in questions:
-                    pairs.append({
-                        "query": q,
-                        "positive": chunk,
-                        "source": f"github/{doc['repo']}/{doc['path']}",
-                        "category": doc["category"],
-                    })
-            else:
-                # Heuristic fallback: first sentence as query
-                sentences = re.split(r'(?<=[.!?])\s+', chunk.strip())
-                for s in sentences[:1]:
-                    s = s.strip()
-                    if 15 <= len(s) <= 150 and sum(c.isalpha() for c in s) / max(len(s), 1) > 0.5:
-                        pairs.append({
-                            "query": s,
+                    pairs.append(
+                        {
+                            "query": q,
                             "positive": chunk,
                             "source": f"github/{doc['repo']}/{doc['path']}",
                             "category": doc["category"],
-                        })
+                        }
+                    )
+            else:
+                # Heuristic fallback: first sentence as query
+                sentences = re.split(r"(?<=[.!?])\s+", chunk.strip())
+                for s in sentences[:1]:
+                    s = s.strip()
+                    if 15 <= len(s) <= 150 and sum(c.isalpha() for c in s) / max(len(s), 1) > 0.5:
+                        pairs.append(
+                            {
+                                "query": s,
+                                "positive": chunk,
+                                "source": f"github/{doc['repo']}/{doc['path']}",
+                                "category": doc["category"],
+                            }
+                        )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w", encoding="utf-8") as f:
@@ -375,15 +397,20 @@ def main():
     parser = argparse.ArgumentParser(description="Ingest GitHub repos into ChromaDB")
     parser.add_argument("--repos", nargs="+", help="GitHub repo URLs")
     parser.add_argument("--repos-file", type=Path, help="File with repo URLs (one per line)")
-    parser.add_argument("--generate-pairs", action="store_true", help="Also generate training pairs")
+    parser.add_argument(
+        "--generate-pairs", action="store_true", help="Also generate training pairs"
+    )
     parser.add_argument("--skip-chromadb", action="store_true", help="Only save locally")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between requests")
     args = parser.parse_args()
 
     urls = args.repos or []
     if args.repos_file and args.repos_file.exists():
-        urls += [l.strip() for l in args.repos_file.read_text().splitlines()
-                 if l.strip() and not l.startswith("#")]
+        urls += [
+            line.strip()
+            for line in args.repos_file.read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
 
     if not urls:
         print("No repos. Use --repos URL1 URL2 or --repos-file file.txt")

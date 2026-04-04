@@ -37,10 +37,9 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -58,9 +57,11 @@ SANDBOX_DIR = BASE_DIR / "data" / "self_improve" / "sandbox"
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RepoAnalysis:
     """Analysis of a single GitHub repo."""
+
     url: str
     name: str
     description: str = ""
@@ -76,13 +77,14 @@ class RepoAnalysis:
 @dataclass
 class Improvement:
     """A proposed improvement to Suyven."""
+
     id: str
     title: str
     description: str
     source_repo: str
     category: str  # training | eval | data | architecture | optimization
     priority: str  # high | medium | low
-    effort: str    # small | medium | large
+    effort: str  # small | medium | large
     target_files: list[str] = field(default_factory=list)
     code_snippet: str = ""
     status: str = "proposed"  # proposed | implementing | testing | passed | failed | merged | rejected | obsolete
@@ -97,6 +99,7 @@ class Improvement:
 # ---------------------------------------------------------------------------
 # GitHub Scout
 # ---------------------------------------------------------------------------
+
 
 class GitHubScout:
     """Fetches GitHub repo metadata and content."""
@@ -154,7 +157,8 @@ class GitHubScout:
         if resp.status_code == 200:
             tree = resp.json().get("tree", [])
             return [
-                item["path"] for item in tree
+                item["path"]
+                for item in tree
                 if item["type"] == "blob" and item["path"].count("/") < max_depth
             ][:200]
         return []
@@ -190,6 +194,7 @@ class GitHubScout:
 # ---------------------------------------------------------------------------
 # Pattern Extractor
 # ---------------------------------------------------------------------------
+
 
 class PatternExtractor:
     """Uses LLM (with multi-backend fallback) to extract actionable patterns."""
@@ -256,7 +261,12 @@ Start with any needed imports, then the new functions."""
     #   "analysis" = cheap/fast for repo analysis + JSON extraction
     #   "code"     = top-tier for code generation (needs to compile!)
     ANALYSIS_BACKENDS = [
-        {"name": "groq", "url_env": "LLM_API_URL", "key_env": "LLM_API_KEY", "model_env": "LLM_MODEL"},
+        {
+            "name": "groq",
+            "url_env": "LLM_API_URL",
+            "key_env": "LLM_API_KEY",
+            "model_env": "LLM_MODEL",
+        },
         {"name": "ollama", "url": "http://localhost:11434/v1", "key": "", "model": "qwen3:14b"},
     ]
     CODE_BACKENDS = [
@@ -266,7 +276,12 @@ Start with any needed imports, then the new functions."""
             "key_env": "GEMINI_API_KEY",
             "model": "gemini-2.5-flash",
         },
-        {"name": "groq", "url_env": "LLM_API_URL", "key_env": "LLM_API_KEY", "model_env": "LLM_MODEL"},
+        {
+            "name": "groq",
+            "url_env": "LLM_API_URL",
+            "key_env": "LLM_API_KEY",
+            "model_env": "LLM_MODEL",
+        },
         {"name": "ollama", "url": "http://localhost:11434/v1", "key": "", "model": "qwen3:14b"},
     ]
 
@@ -298,12 +313,17 @@ Start with any needed imports, then the new functions."""
                 backends.append(entry)
             return backends
 
-        self.backends = _build_backends(self.ANALYSIS_BACKENDS)        # For analysis
-        self.code_backends = _build_backends(self.CODE_BACKENDS)       # For code gen
+        self.backends = _build_backends(self.ANALYSIS_BACKENDS)  # For analysis
+        self.code_backends = _build_backends(self.CODE_BACKENDS)  # For code gen
 
-    def _call_llm(self, prompt: str, system: str | None = None,
-                  max_tokens: int = 4000, temperature: float = 0.3,
-                  role: str = "analysis") -> str | None:
+    def _call_llm(
+        self,
+        prompt: str,
+        system: str | None = None,
+        max_tokens: int = 4000,
+        temperature: float = 0.3,
+        role: str = "analysis",
+    ) -> str | None:
         """Call LLM with automatic backend fallback.
 
         Args:
@@ -378,83 +398,134 @@ Start with any needed imports, then the new functions."""
         logger.warning("Could not parse JSON: %s...", content[:200])
         return []
 
-    def extract_offline(self, repo_info: dict, readme: str, tree: list[str],
-                        extra_content: str = "") -> list[dict]:
+    def extract_offline(
+        self, repo_info: dict, readme: str, tree: list[str], extra_content: str = ""
+    ) -> list[dict]:
         """Offline pattern extraction using regex (no LLM needed)."""
         all_text = (readme + "\n" + extra_content).lower()
         found = []
 
         PATTERNS = [
-            (r"flash.?attention|flash_attn", {
-                "title": "Flash Attention for faster training",
-                "description": "Use Flash Attention for O(N) memory attention computation during LoRA training",
-                "category": "optimization", "priority": "high", "effort": "medium",
-                "target_files": ["finetune/train.py", "finetune/optimizations.py"],
-                "code_hint": "from flash_attn import flash_attn_func",
-            }),
-            (r"gradient.?checkpoint|activation.?checkpoint", {
-                "title": "Gradient checkpointing for memory savings",
-                "description": "Trade ~25% speed for ~40% VRAM reduction during backprop",
-                "category": "optimization", "priority": "medium", "effort": "small",
-                "target_files": ["finetune/train.py", "finetune/optimizations.py"],
-                "code_hint": "model.gradient_checkpointing_enable()",
-            }),
-            (r"bf16|bfloat16|mixed.?precision", {
-                "title": "BFloat16 training (Ampere+ GPUs)",
-                "description": "BF16 is more stable than FP16 for training, no GradScaler needed",
-                "category": "optimization", "priority": "high", "effort": "small",
-                "target_files": ["finetune/train.py", "finetune/optimizations.py"],
-                "code_hint": "torch.amp.autocast('cuda', dtype=torch.bfloat16)",
-            }),
-            (r"qlora|4.?bit|quantiz", {
-                "title": "QLoRA: 4-bit quantized base + LoRA adapters",
-                "description": "Quantize base model to 4-bit, train only LoRA in FP16 -- 75% VRAM reduction",
-                "category": "training", "priority": "high", "effort": "medium",
-                "target_files": ["finetune/lora.py", "finetune/train.py"],
-                "code_hint": "BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)",
-            }),
-            (r"dpo|direct.?preference|preference.?optim", {
-                "title": "DPO training for embedding preference learning",
-                "description": "Train embeddings to prefer relevant passages over irrelevant ones directly",
-                "category": "training", "priority": "high", "effort": "large",
-                "target_files": ["finetune/train.py", "finetune/losses.py"],
-                "code_hint": "DPO loss: log_sigmoid(beta * (score_chosen - score_rejected))",
-            }),
-            (r"matryoshka|adaptive.?dim", {
-                "title": "Matryoshka embeddings (adaptive dimensionality)",
-                "description": "Train embeddings that work at multiple dimensions (384, 256, 128, 64)",
-                "category": "training", "priority": "medium", "effort": "medium",
-                "target_files": ["finetune/train.py", "finetune/losses.py"],
-                "code_hint": "Loss at multiple truncated dimensions: sum(loss(emb[:d]) for d in dims)",
-            }),
-            (r"hard.?negativ|contrastive.*min", {
-                "title": "Hard negative mining during training",
-                "description": "Mine hard negatives from in-batch embeddings for stronger contrastive signal",
-                "category": "data", "priority": "high", "effort": "medium",
-                "target_files": ["finetune/train.py", "finetune/data_gen_v2.py"],
-                "code_hint": "Select negatives with highest similarity that are still incorrect",
-            }),
-            (r"early.?stop|patience|best.?model", {
-                "title": "Early stopping with best model checkpoint",
-                "description": "Stop training when eval loss plateaus, keep best checkpoint",
-                "category": "training", "priority": "medium", "effort": "small",
-                "target_files": ["finetune/train.py"],
-                "code_hint": "if eval_loss < best_loss: save_checkpoint(); patience_counter = 0",
-            }),
-            (r"onnx|tensorrt|openvino", {
-                "title": "ONNX/TensorRT export for faster inference",
-                "description": "Export fine-tuned model to ONNX for 2-4x faster inference",
-                "category": "optimization", "priority": "medium", "effort": "medium",
-                "target_files": ["finetune/export.py", "rag/model_registry.py"],
-                "code_hint": "torch.onnx.export(model, dummy_input, 'model.onnx')",
-            }),
-            (r"packing|sequence.?pack", {
-                "title": "Sequence packing (eliminate padding waste)",
-                "description": "Pack multiple short sequences into single batch slots -- 30% faster",
-                "category": "optimization", "priority": "high", "effort": "medium",
-                "target_files": ["finetune/optimizations.py", "finetune/train.py"],
-                "code_hint": "Pack sequences to fill max_length slots, use attention mask for boundaries",
-            }),
+            (
+                r"flash.?attention|flash_attn",
+                {
+                    "title": "Flash Attention for faster training",
+                    "description": "Use Flash Attention for O(N) memory attention computation during LoRA training",
+                    "category": "optimization",
+                    "priority": "high",
+                    "effort": "medium",
+                    "target_files": ["finetune/train.py", "finetune/optimizations.py"],
+                    "code_hint": "from flash_attn import flash_attn_func",
+                },
+            ),
+            (
+                r"gradient.?checkpoint|activation.?checkpoint",
+                {
+                    "title": "Gradient checkpointing for memory savings",
+                    "description": "Trade ~25% speed for ~40% VRAM reduction during backprop",
+                    "category": "optimization",
+                    "priority": "medium",
+                    "effort": "small",
+                    "target_files": ["finetune/train.py", "finetune/optimizations.py"],
+                    "code_hint": "model.gradient_checkpointing_enable()",
+                },
+            ),
+            (
+                r"bf16|bfloat16|mixed.?precision",
+                {
+                    "title": "BFloat16 training (Ampere+ GPUs)",
+                    "description": "BF16 is more stable than FP16 for training, no GradScaler needed",
+                    "category": "optimization",
+                    "priority": "high",
+                    "effort": "small",
+                    "target_files": ["finetune/train.py", "finetune/optimizations.py"],
+                    "code_hint": "torch.amp.autocast('cuda', dtype=torch.bfloat16)",
+                },
+            ),
+            (
+                r"qlora|4.?bit|quantiz",
+                {
+                    "title": "QLoRA: 4-bit quantized base + LoRA adapters",
+                    "description": "Quantize base model to 4-bit, train only LoRA in FP16 -- 75% VRAM reduction",
+                    "category": "training",
+                    "priority": "high",
+                    "effort": "medium",
+                    "target_files": ["finetune/lora.py", "finetune/train.py"],
+                    "code_hint": "BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)",
+                },
+            ),
+            (
+                r"dpo|direct.?preference|preference.?optim",
+                {
+                    "title": "DPO training for embedding preference learning",
+                    "description": "Train embeddings to prefer relevant passages over irrelevant ones directly",
+                    "category": "training",
+                    "priority": "high",
+                    "effort": "large",
+                    "target_files": ["finetune/train.py", "finetune/losses.py"],
+                    "code_hint": "DPO loss: log_sigmoid(beta * (score_chosen - score_rejected))",
+                },
+            ),
+            (
+                r"matryoshka|adaptive.?dim",
+                {
+                    "title": "Matryoshka embeddings (adaptive dimensionality)",
+                    "description": "Train embeddings that work at multiple dimensions (384, 256, 128, 64)",
+                    "category": "training",
+                    "priority": "medium",
+                    "effort": "medium",
+                    "target_files": ["finetune/train.py", "finetune/losses.py"],
+                    "code_hint": "Loss at multiple truncated dimensions: sum(loss(emb[:d]) for d in dims)",
+                },
+            ),
+            (
+                r"hard.?negativ|contrastive.*min",
+                {
+                    "title": "Hard negative mining during training",
+                    "description": "Mine hard negatives from in-batch embeddings for stronger contrastive signal",
+                    "category": "data",
+                    "priority": "high",
+                    "effort": "medium",
+                    "target_files": ["finetune/train.py", "finetune/data_gen_v2.py"],
+                    "code_hint": "Select negatives with highest similarity that are still incorrect",
+                },
+            ),
+            (
+                r"early.?stop|patience|best.?model",
+                {
+                    "title": "Early stopping with best model checkpoint",
+                    "description": "Stop training when eval loss plateaus, keep best checkpoint",
+                    "category": "training",
+                    "priority": "medium",
+                    "effort": "small",
+                    "target_files": ["finetune/train.py"],
+                    "code_hint": "if eval_loss < best_loss: save_checkpoint(); patience_counter = 0",
+                },
+            ),
+            (
+                r"onnx|tensorrt|openvino",
+                {
+                    "title": "ONNX/TensorRT export for faster inference",
+                    "description": "Export fine-tuned model to ONNX for 2-4x faster inference",
+                    "category": "optimization",
+                    "priority": "medium",
+                    "effort": "medium",
+                    "target_files": ["finetune/export.py", "rag/model_registry.py"],
+                    "code_hint": "torch.onnx.export(model, dummy_input, 'model.onnx')",
+                },
+            ),
+            (
+                r"packing|sequence.?pack",
+                {
+                    "title": "Sequence packing (eliminate padding waste)",
+                    "description": "Pack multiple short sequences into single batch slots -- 30% faster",
+                    "category": "optimization",
+                    "priority": "high",
+                    "effort": "medium",
+                    "target_files": ["finetune/optimizations.py", "finetune/train.py"],
+                    "code_hint": "Pack sequences to fill max_length slots, use attention mask for boundaries",
+                },
+            ),
         ]
 
         seen = set()
@@ -465,8 +536,9 @@ Start with any needed imports, then the new functions."""
 
         return found
 
-    def extract(self, repo_info: dict, readme: str, tree: list[str],
-                extra_content: str = "") -> list[dict]:
+    def extract(
+        self, repo_info: dict, readme: str, tree: list[str], extra_content: str = ""
+    ) -> list[dict]:
         """Extract improvements -- tries LLM backends, falls back to offline."""
         tree_str = "\n".join(tree[:100])
         extra = f"\nKey file contents:\n{extra_content}" if extra_content else ""
@@ -489,15 +561,16 @@ Start with any needed imports, then the new functions."""
         logger.info("LLM extraction failed, using offline extraction")
         return self.extract_offline(repo_info, readme, tree, extra_content)
 
-    def generate_implementation(self, improvement: dict, target_file: Path,
-                                context_files: list[Path] | None = None) -> str | None:
+    def generate_implementation(
+        self, improvement: dict, target_file: Path, context_files: list[Path] | None = None
+    ) -> str | None:
         """Generate code implementation for an improvement."""
         existing_code = ""
         if target_file.exists():
             existing_code = target_file.read_text(encoding="utf-8")
 
         context = ""
-        for cf in (context_files or []):
+        for cf in context_files or []:
             if cf.exists():
                 context += f"\n--- {cf.name} ---\n{cf.read_text(encoding='utf-8')[:3000]}\n"
 
@@ -519,6 +592,7 @@ Return ONLY the complete Python file content. No markdown, no explanation."""
 # ---------------------------------------------------------------------------
 # Knowledge Base
 # ---------------------------------------------------------------------------
+
 
 class KnowledgeBase:
     """Persistent storage for repo analyses and improvements."""
@@ -548,8 +622,9 @@ class KnowledgeBase:
             if imp.title not in existing_titles:
                 self.data["improvements"].append(asdict(imp))
 
-    def get_improvements(self, status: str | None = None,
-                         category: str | None = None) -> list[dict]:
+    def get_improvements(
+        self, status: str | None = None, category: str | None = None
+    ) -> list[dict]:
         results = self.data["improvements"]
         if status:
             results = [i for i in results if i["status"] == status]
@@ -575,17 +650,22 @@ class KnowledgeBase:
             "by_status": {
                 s: len([i for i in improvements if i["status"] == s])
                 for s in sorted(set(i["status"] for i in improvements))
-            } if improvements else {},
+            }
+            if improvements
+            else {},
             "by_category": {
                 c: len([i for i in improvements if i["category"] == c])
                 for c in sorted(set(i["category"] for i in improvements))
-            } if improvements else {},
+            }
+            if improvements
+            else {},
         }
 
 
 # ---------------------------------------------------------------------------
 # Sandbox — isolated testing environment
 # ---------------------------------------------------------------------------
+
 
 class Sandbox:
     """Isolated environment for testing improvements before merging.
@@ -656,10 +736,16 @@ class Sandbox:
         """Run eval suite and return metrics."""
         logger.info("Running eval suite...")
         try:
-            result = subprocess.run(
-                [sys.executable, "-m", "finetune.eval_suite",
-                 "--tasks", "intrinsic,retrieval,latency",
-                 "--output", str(self.sandbox_dir / "eval_results.json")],
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "finetune.eval_suite",
+                    "--tasks",
+                    "intrinsic,retrieval,latency",
+                    "--output",
+                    str(self.sandbox_dir / "eval_results.json"),
+                ],
                 cwd=str(BASE_DIR),
                 capture_output=True,
                 text=True,
@@ -676,8 +762,14 @@ class Sandbox:
     def run_syntax_check(self, file_path: Path) -> dict:
         """Quick syntax check on modified file."""
         result = subprocess.run(
-            [sys.executable, "-c", f"import ast; ast.parse(open(r'{file_path}', encoding='utf-8').read())"],
-            capture_output=True, text=True, timeout=10,
+            [
+                sys.executable,
+                "-c",
+                f"import ast; ast.parse(open(r'{file_path}', encoding='utf-8').read())",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return {
             "valid": result.returncode == 0,
@@ -713,6 +805,7 @@ class Sandbox:
 # Evaluator — decides if improvement is worth keeping
 # ---------------------------------------------------------------------------
 
+
 class ImprovementEvaluator:
     """Evaluates whether an improvement actually helps."""
 
@@ -729,9 +822,13 @@ class ImprovementEvaluator:
             a_margin = after["intrinsic"].get("ft_margin", 0)
 
             if a_acc >= b_acc and a_margin >= b_margin:
-                verdict["details"].append(f"Intrinsic: OK (acc {b_acc}->{a_acc}, margin {b_margin}->{a_margin})")
+                verdict["details"].append(
+                    f"Intrinsic: OK (acc {b_acc}->{a_acc}, margin {b_margin}->{a_margin})"
+                )
             else:
-                verdict["details"].append(f"Intrinsic: DEGRADED (acc {b_acc}->{a_acc}, margin {b_margin}->{a_margin})")
+                verdict["details"].append(
+                    f"Intrinsic: DEGRADED (acc {b_acc}->{a_acc}, margin {b_margin}->{a_margin})"
+                )
                 return verdict
 
         # Check retrieval metrics
@@ -742,7 +839,9 @@ class ImprovementEvaluator:
             a_mrr = after["retrieval"].get("ft_mrr5", 0)
 
             if a_mrr >= b_mrr:
-                verdict["details"].append(f"Retrieval: OK (MRR {b_mrr}->{a_mrr}, wins {b_wins}->{a_wins})")
+                verdict["details"].append(
+                    f"Retrieval: OK (MRR {b_mrr}->{a_mrr}, wins {b_wins}->{a_wins})"
+                )
             else:
                 verdict["details"].append(f"Retrieval: DEGRADED (MRR {b_mrr}->{a_mrr})")
                 return verdict
@@ -755,7 +854,9 @@ class ImprovementEvaluator:
             if overhead < 50:  # Less than 50% overhead is acceptable
                 verdict["details"].append(f"Latency: OK ({b_lat}->{a_lat}ms, {overhead:+.0f}%)")
             else:
-                verdict["details"].append(f"Latency: TOO SLOW ({b_lat}->{a_lat}ms, {overhead:+.0f}%)")
+                verdict["details"].append(
+                    f"Latency: TOO SLOW ({b_lat}->{a_lat}ms, {overhead:+.0f}%)"
+                )
                 return verdict
 
         verdict["improved"] = True
@@ -767,20 +868,35 @@ class ImprovementEvaluator:
 
         Returns reason string if obsolete, None if still relevant.
         """
-        title = improvement.get("title", "").lower()
         hint = (improvement.get("code_snippet") or improvement.get("code_hint", "")).lower()
 
         # Check if key patterns from the hint are already in target files
         if hint:
-            keywords = [w for w in re.findall(r'\w{5,}', hint) if w not in (
-                "import", "return", "class", "function", "module", "model", "train",
-                "torch", "numpy", "config", "param"
-            )]
+            keywords = [
+                w
+                for w in re.findall(r"\w{5,}", hint)
+                if w
+                not in (
+                    "import",
+                    "return",
+                    "class",
+                    "function",
+                    "module",
+                    "model",
+                    "train",
+                    "torch",
+                    "numpy",
+                    "config",
+                    "param",
+                )
+            ]
             for fname, content in current_files.items():
                 content_lower = content.lower()
                 matches = sum(1 for kw in keywords if kw in content_lower)
                 if matches >= len(keywords) * 0.6:  # 60% of keywords already present
-                    return f"Already implemented in {fname} ({matches}/{len(keywords)} keywords found)"
+                    return (
+                        f"Already implemented in {fname} ({matches}/{len(keywords)} keywords found)"
+                    )
 
         return None
 
@@ -789,13 +905,19 @@ class ImprovementEvaluator:
 # Self-Improvement Agent — the full pipeline
 # ---------------------------------------------------------------------------
 
+
 class SelfImproveAgent:
     """The main self-improvement pipeline: analyze -> implement -> test -> merge/revert."""
 
     INTERESTING_FILES = [
-        r".*train.*\.py$", r".*lora.*\.py$", r".*embed.*\.py$",
-        r".*eval.*\.py$", r".*optim.*\.py$", r".*config.*\.(py|yaml|yml)$",
-        r".*loss.*\.py$", r".*data.*\.py$",
+        r".*train.*\.py$",
+        r".*lora.*\.py$",
+        r".*embed.*\.py$",
+        r".*eval.*\.py$",
+        r".*optim.*\.py$",
+        r".*config.*\.(py|yaml|yml)$",
+        r".*loss.*\.py$",
+        r".*data.*\.py$",
     ]
 
     def __init__(self, github_token: str | None = None):
@@ -829,9 +951,11 @@ class SelfImproveAgent:
         logger.info("  Improvements found: %d", len(improvements_raw))
 
         analysis = RepoAnalysis(
-            url=url, name=info.get("name", ""),
+            url=url,
+            name=info.get("name", ""),
             description=info.get("description", ""),
-            stars=info.get("stars", 0), language=info.get("language", ""),
+            stars=info.get("stars", 0),
+            language=info.get("language", ""),
             readme_summary=readme[:500],
             key_patterns=[i.get("title", "") for i in improvements_raw],
             applicable_improvements=improvements_raw,
@@ -840,19 +964,21 @@ class SelfImproveAgent:
 
         improvements = []
         for i, raw in enumerate(improvements_raw):
-            improvements.append(Improvement(
-                id=f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{i:02d}",
-                title=raw.get("title", "Untitled"),
-                description=raw.get("description", ""),
-                source_repo=url,
-                category=raw.get("category", "architecture"),
-                priority=raw.get("priority", "medium"),
-                effort=raw.get("effort", "medium"),
-                target_files=raw.get("target_files", []),
-                code_snippet=raw.get("code_hint", ""),
-                status="proposed",
-                created_at=datetime.now().isoformat(),
-            ))
+            improvements.append(
+                Improvement(
+                    id=f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{i:02d}",
+                    title=raw.get("title", "Untitled"),
+                    description=raw.get("description", ""),
+                    source_repo=url,
+                    category=raw.get("category", "architecture"),
+                    priority=raw.get("priority", "medium"),
+                    effort=raw.get("effort", "medium"),
+                    target_files=raw.get("target_files", []),
+                    code_snippet=raw.get("code_hint", ""),
+                    status="proposed",
+                    created_at=datetime.now().isoformat(),
+                )
+            )
 
         self.kb.add_repo(analysis)
         self.kb.add_improvements(improvements)
@@ -879,10 +1005,12 @@ class SelfImproveAgent:
         improvements = self.kb.get_improvements(status="proposed")
         priority_order = {"high": 0, "medium": 1, "low": 2}
         effort_order = {"small": 0, "medium": 1, "large": 2}
-        improvements.sort(key=lambda x: (
-            priority_order.get(x["priority"], 1),
-            effort_order.get(x["effort"], 1),
-        ))
+        improvements.sort(
+            key=lambda x: (
+                priority_order.get(x["priority"], 1),
+                effort_order.get(x["effort"], 1),
+            )
+        )
         return improvements
 
     # --- File Mapper ---
@@ -893,7 +1021,7 @@ class SelfImproveAgent:
         "train": "finetune/train.py",
         "trainer": "finetune/train.py",
         "lora": "finetune/lora.py",
-        "loss": "finetune/train.py",          # losses are in train.py
+        "loss": "finetune/train.py",  # losses are in train.py
         "optim": "finetune/optimizations.py",
         "checkpoint": "finetune/train.py",
         "scheduler": "finetune/train.py",
@@ -939,12 +1067,14 @@ class SelfImproveAgent:
                 return fp
 
         # 2. Smart mapping by keywords in title, description, and target_files
-        search_text = " ".join([
-            improvement.get("title", ""),
-            improvement.get("description", ""),
-            improvement.get("code_snippet", ""),
-            " ".join(improvement.get("target_files", [])),
-        ]).lower()
+        search_text = " ".join(
+            [
+                improvement.get("title", ""),
+                improvement.get("description", ""),
+                improvement.get("code_snippet", ""),
+                " ".join(improvement.get("target_files", [])),
+            ]
+        ).lower()
 
         # Score each project file by keyword matches
         scores: dict[str, int] = {}
@@ -1020,8 +1150,9 @@ class SelfImproveAgent:
         # Step 2: Resolve target file (map from source repo to our project)
         actual_target = self._resolve_target_file(improvement)
         if not actual_target:
-            self.kb.update_improvement(imp_id, status="failed",
-                                       rejection_reason="Could not resolve target file")
+            self.kb.update_improvement(
+                imp_id, status="failed", rejection_reason="Could not resolve target file"
+            )
             return {"status": "failed", "reason": "No target file"}
 
         logger.info("Step 2: Generating code for %s...", actual_target)
@@ -1031,13 +1162,12 @@ class SelfImproveAgent:
             BASE_DIR / "finetune" / "optimizations.py",
         ]
 
-        new_code = self.extractor.generate_implementation(
-            improvement, actual_target, context_files
-        )
+        new_code = self.extractor.generate_implementation(improvement, actual_target, context_files)
 
         if not new_code:
-            self.kb.update_improvement(imp_id, status="failed",
-                                       rejection_reason="LLM failed to generate code")
+            self.kb.update_improvement(
+                imp_id, status="failed", rejection_reason="LLM failed to generate code"
+            )
             return {"status": "failed", "reason": "Code generation failed"}
 
         # Clean code (remove markdown fences if any)
@@ -1054,8 +1184,9 @@ class SelfImproveAgent:
         if not syntax["valid"]:
             logger.warning("SYNTAX ERROR: %s", syntax["error"])
             sandbox.revert()
-            self.kb.update_improvement(imp_id, status="failed",
-                                       rejection_reason=f"Syntax error: {syntax['error'][:200]}")
+            self.kb.update_improvement(
+                imp_id, status="failed", rejection_reason=f"Syntax error: {syntax['error'][:200]}"
+            )
             return {"status": "failed", "reason": "Syntax error", "error": syntax["error"]}
 
         # Step 4: Run tests
@@ -1064,19 +1195,25 @@ class SelfImproveAgent:
         test_results = sandbox.run_tests()
 
         if not test_results["passed"]:
-            logger.warning("TESTS FAILED: %d passed, %d failed",
-                           test_results["tests_passed"], test_results["tests_failed"])
+            logger.warning(
+                "TESTS FAILED: %d passed, %d failed",
+                test_results["tests_passed"],
+                test_results["tests_failed"],
+            )
             sandbox.revert()
             self.kb.update_improvement(
-                imp_id, status="failed",
+                imp_id,
+                status="failed",
                 test_results=test_results,
                 rejection_reason=f"Tests failed: {test_results['tests_failed']} failures",
             )
             return {"status": "failed", "reason": "Tests failed", "test_results": test_results}
 
-        logger.info("Tests passed: %d/%d",
-                     test_results["tests_passed"],
-                     test_results["tests_passed"] + test_results["tests_failed"])
+        logger.info(
+            "Tests passed: %d/%d",
+            test_results["tests_passed"],
+            test_results["tests_passed"] + test_results["tests_failed"],
+        )
 
         # Step 5: Run eval
         logger.info("Step 5: Running eval suite...")
@@ -1094,7 +1231,8 @@ class SelfImproveAgent:
             logger.info("IMPROVEMENT ACCEPTED - metrics improved!")
             sandbox.commit_changes()
             self.kb.update_improvement(
-                imp_id, status="merged",
+                imp_id,
+                status="merged",
                 implemented_at=datetime.now().isoformat(),
                 test_results=test_results,
                 eval_before=eval_before,
@@ -1110,7 +1248,8 @@ class SelfImproveAgent:
             logger.info("IMPROVEMENT REJECTED - metrics did not improve")
             sandbox.revert()
             self.kb.update_improvement(
-                imp_id, status="rejected",
+                imp_id,
+                status="rejected",
                 test_results=test_results,
                 eval_before=eval_before,
                 eval_after=eval_after,
@@ -1183,8 +1322,9 @@ class SelfImproveAgent:
 
         print("\n" + "=" * 70)
         print("SELF-IMPROVEMENT PLAN")
-        print(f"Repos analyzed: {stats['total_repos']} | "
-              f"Improvements: {stats['total_improvements']}")
+        print(
+            f"Repos analyzed: {stats['total_repos']} | Improvements: {stats['total_improvements']}"
+        )
         if stats.get("by_status"):
             parts = [f"{s}: {n}" for s, n in stats["by_status"].items()]
             print(f"Status: {' | '.join(parts)}")
@@ -1192,7 +1332,9 @@ class SelfImproveAgent:
 
         for i, imp in enumerate(plan, 1):
             tag = {"high": "[!!!]", "medium": "[!!]", "low": "[!]"}.get(imp["priority"], "[?]")
-            effort = {"small": "quick", "medium": "moderate", "large": "heavy"}.get(imp["effort"], "")
+            effort = {"small": "quick", "medium": "moderate", "large": "heavy"}.get(
+                imp["effort"], ""
+            )
             print(f"\n{i}. {tag} [{imp['category'].upper()}] {imp['title']}")
             print(f"   {imp['description'][:120]}")
             print(f"   Effort: {effort} | Source: {imp['source_repo'].split('/')[-1]}")
@@ -1232,6 +1374,7 @@ class SelfImproveAgent:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(description="Self-improvement agent")
     parser.add_argument("--repo", type=str, help="Analyze a specific GitHub repo URL")
@@ -1241,7 +1384,9 @@ def main():
     parser.add_argument("--history", action="store_true", help="Show all improvement history")
     parser.add_argument("--stats", action="store_true", help="Show knowledge base stats")
     parser.add_argument("--implement", type=str, help="Implement a specific improvement by ID")
-    parser.add_argument("--auto", action="store_true", help="Auto-improve: implement top improvements")
+    parser.add_argument(
+        "--auto", action="store_true", help="Auto-improve: implement top improvements"
+    )
     parser.add_argument("--max-auto", type=int, default=3, help="Max improvements in auto mode")
     parser.add_argument("--token", type=str, default=None, help="GitHub token")
     args = parser.parse_args()

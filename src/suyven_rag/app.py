@@ -1,9 +1,10 @@
 """Suyven v1 — RAG web interface (Streamlit)."""
 
-import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
 
-from suyven_rag.rag.config import KNOWLEDGE_DIR, LLM_MODEL, LLM_PROVIDER, WORKERS
+import streamlit as st
+
+from suyven_rag.rag.config import KNOWLEDGE_DIR, WORKERS
 from suyven_rag.rag.index_registry import get_index, reset_index
 from suyven_rag.rag.llm import stream_chat
 from suyven_rag.rag.loader import iter_files
@@ -26,6 +27,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # Init (runs once per session)
 # ---------------------------------------------------------------------------
+
 
 @st.cache_resource(show_spinner="Starting Ollama...")
 def init():
@@ -68,8 +70,9 @@ with st.sidebar:
     st.metric("Chunks indexed", count)
 
     # ── Ingest section ────────────────────────────────────────────────
-    force = st.checkbox("Full re-index", value=False,
-                        help="Wipe the collection and re-index everything")
+    force = st.checkbox(
+        "Full re-index", value=False, help="Wipe the collection and re-index everything"
+    )
 
     if st.button("🚀 Ingest Now", use_container_width=True):
         files = list(iter_files(KNOWLEDGE_DIR))
@@ -85,18 +88,18 @@ with st.sidebar:
 
             with ThreadPoolExecutor(max_workers=WORKERS) as pool:
                 futures = {pool.submit(read_and_chunk, f): i for i, f in enumerate(files)}
-                done = 0
-                for future in futures:
+                for done, future in enumerate(futures, 1):
                     result = future.result()
                     file_chunks.append(result)
                     total_chunk_count += len(result[1])
-                    done += 1
                     phase1.progress(
                         done / len(files),
                         text=f"� Read {done}/{len(files)} files — {total_chunk_count} chunks found",
                     )
 
-            phase1.progress(1.0, text=f"📖 Done! {total_chunk_count} chunks from {len(files)} files")
+            phase1.progress(
+                1.0, text=f"📖 Done! {total_chunk_count} chunks from {len(files)} files"
+            )
 
             # ── Phase 2: Pre-load embedding model ───────────────────
             with st.spinner("🧠 Loading embedding model to GPU…"):
@@ -122,9 +125,7 @@ with st.sidebar:
                     processed / len(file_chunks),
                     text=f"⚡ {processed}/{len(file_chunks)} — {rel}",
                 )
-                status.caption(
-                    f"✅ {total_added} chunks added · ⏭️ {total_skipped} skipped"
-                )
+                status.caption(f"✅ {total_added} chunks added · ⏭️ {total_skipped} skipped")
 
             phase2.progress(1.0, text="✅ Ingestion complete!")
             st.success(
@@ -184,4 +185,3 @@ if query:
             path = f"{r['category']}/{r['source']}"
             with st.expander(f"**{path}** — {r['score']:.0%} relevance"):
                 st.markdown(r["text"])
-

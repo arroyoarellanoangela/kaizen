@@ -14,8 +14,8 @@ import json
 import logging
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import mean as _mean
 
@@ -31,19 +31,21 @@ _RETRIEVAL_ISSUE_FLAGS = {"empty_retrieval", "retrieval_failure", "weak_retrieva
 @dataclass
 class GapEntry:
     """A detected knowledge gap."""
-    pattern: str              # normalized query pattern
-    count: int                # how many times this gap was hit
+
+    pattern: str  # normalized query pattern
+    count: int  # how many times this gap was hit
     example_queries: list[str]  # up to 3 example queries
-    flags: list[str]          # most common flags
+    flags: list[str]  # most common flags
     avg_reranker_score: float | None
-    categories: list[str]     # categories these queries touched
-    first_seen: str           # ISO timestamp
-    last_seen: str            # ISO timestamp
+    categories: list[str]  # categories these queries touched
+    first_seen: str  # ISO timestamp
+    last_seen: str  # ISO timestamp
 
 
 @dataclass
 class GapReport:
     """Full gap analysis report."""
+
     total_queries: int
     total_flagged: int
     flag_frequency: dict[str, int]
@@ -79,7 +81,7 @@ def load_query_log(since_days: int | None = None) -> list[dict]:
     entries = []
     cutoff = None
     if since_days is not None:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+        cutoff = datetime.now(UTC) - timedelta(days=since_days)
 
     with open(QUERY_LOG, encoding="utf-8") as f:
         for line in f:
@@ -146,16 +148,18 @@ def analyze_gaps(entries: list[dict], top_n: int = 20) -> GapReport:
             for c in e.get("source_categories", []):
                 cats.add(c)
 
-        gaps.append(GapEntry(
-            pattern=topic,
-            count=len(group),
-            example_queries=list({e.get("query", "") for e in group})[:3],
-            flags=[f for f, _ in all_flags.most_common(3)],
-            avg_reranker_score=round(_mean(scores), 4) if scores else None,
-            categories=sorted(cats),
-            first_seen=min(timestamps) if timestamps else "",
-            last_seen=max(timestamps) if timestamps else "",
-        ))
+        gaps.append(
+            GapEntry(
+                pattern=topic,
+                count=len(group),
+                example_queries=list({e.get("query", "") for e in group})[:3],
+                flags=[f for f, _ in all_flags.most_common(3)],
+                avg_reranker_score=round(_mean(scores), 4) if scores else None,
+                categories=sorted(cats),
+                first_seen=min(timestamps) if timestamps else "",
+                last_seen=max(timestamps) if timestamps else "",
+            )
+        )
 
     gaps.sort(key=lambda g: g.count, reverse=True)
 
@@ -172,34 +176,40 @@ def analyze_gaps(entries: list[dict], top_n: int = 20) -> GapReport:
         flag_frequency=dict(flag_counter.most_common()),
         gaps=gaps[:top_n],
         top_missing_topics=topic_counter.most_common(top_n),
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
 def print_report(report: GapReport) -> None:
     """Print human-readable gap report."""
     print(f"\n{'=' * 62}")
-    print(f"  Knowledge Gap Report")
+    print("  Knowledge Gap Report")
     print(f"{'=' * 62}")
     print(f"\n  Total queries analyzed: {report.total_queries}")
-    print(f"  Queries with issues:    {report.total_flagged} ({report.total_flagged / max(report.total_queries, 1):.0%})")
+    print(
+        f"  Queries with issues:    {report.total_flagged} ({report.total_flagged / max(report.total_queries, 1):.0%})"
+    )
 
     if report.flag_frequency:
-        print(f"\n  Flag frequency:")
+        print("\n  Flag frequency:")
         for flag, count in report.flag_frequency.items():
             print(f"    {flag:<25s} {count:>4d}")
 
     if report.gaps:
         print(f"\n  {'=' * 58}")
-        print(f"  Top Knowledge Gaps (recurring failures)")
+        print("  Top Knowledge Gaps (recurring failures)")
         print(f"  {'=' * 58}")
         for i, gap in enumerate(report.gaps[:15], 1):
-            score_str = f"avg_score={gap.avg_reranker_score:.2f}" if gap.avg_reranker_score is not None else "no scores"
+            score_str = (
+                f"avg_score={gap.avg_reranker_score:.2f}"
+                if gap.avg_reranker_score is not None
+                else "no scores"
+            )
             print(f"\n  {i}. [{gap.count}x] {gap.pattern}")
             print(f"     Flags: {', '.join(gap.flags)}")
             print(f"     {score_str} | categories: {', '.join(gap.categories[:3]) or 'none'}")
             if gap.example_queries:
-                print(f"     Example: \"{gap.example_queries[0][:80]}\"")
+                print(f'     Example: "{gap.example_queries[0][:80]}"')
 
     if not report.gaps:
         print("\n  No recurring gaps detected.")
@@ -225,6 +235,7 @@ def main():
 
     if args.json:
         import dataclasses
+
         print(json.dumps(dataclasses.asdict(report), indent=2, ensure_ascii=False))
     else:
         print_report(report)

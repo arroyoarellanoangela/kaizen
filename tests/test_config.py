@@ -2,9 +2,9 @@
 
 from suyven_rag.rag.config import (
     ADD_BATCH_SIZE,
+    CHROMA_DIR,
     CHUNK_OVERLAP,
     CHUNK_SIZE,
-    CHROMA_DIR,
     COLLECTION_NAME,
     EMBED_BATCH,
     EMBED_MODEL,
@@ -23,6 +23,7 @@ from suyven_rag.rag.config import (
 
 def test_paths_are_pathlib():
     from pathlib import Path
+
     assert isinstance(KNOWLEDGE_DIR, Path)
     assert isinstance(CHROMA_DIR, Path)
 
@@ -73,7 +74,9 @@ class TestSecretHelper:
     def test_falls_back_to_env(self):
         """When no Docker secret file exists, reads from env var."""
         import os
+
         from suyven_rag.rag.config import _secret
+
         os.environ["_TEST_SECRET_XYZ"] = "env-value"
         try:
             assert _secret("_TEST_SECRET_XYZ") == "env-value"
@@ -82,12 +85,12 @@ class TestSecretHelper:
 
     def test_returns_default(self):
         from suyven_rag.rag.config import _secret
+
         assert _secret("_NONEXISTENT_SECRET_ABC", "fallback") == "fallback"
 
     def test_reads_from_file(self, tmp_path):
         """When a secret file exists, reads from it."""
         from unittest.mock import patch
-        from suyven_rag.rag.config import _secret
 
         # Create a fake secret file
         secret_file = tmp_path / "TEST_KEY"

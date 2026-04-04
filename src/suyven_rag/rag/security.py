@@ -30,9 +30,11 @@ logger = logging.getLogger(__name__)
 # Config from env
 # ---------------------------------------------------------------------------
 
+
 def _read_secret(name: str, default: str = "") -> str:
     """Read from Docker secret (/run/secrets/<name>) or env var."""
     from pathlib import Path
+
     secret_path = Path("/run/secrets") / name
     try:
         if secret_path.is_file():
@@ -41,17 +43,20 @@ def _read_secret(name: str, default: str = "") -> str:
         pass
     return os.getenv(name, default)
 
+
 _raw_keys = _read_secret("API_KEYS").strip()
 API_KEYS: set[str] = {k.strip() for k in _raw_keys.split(",") if k.strip()} if _raw_keys else set()
 
-RATE_LIMIT_RPM = int(os.getenv("RATE_LIMIT_RPM", "60"))       # requests per minute
-RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))    # max burst in 1 second
-MAX_QUERY_LENGTH = int(os.getenv("MAX_QUERY_LENGTH", "2000"))   # max chars per query
-MAX_TOP_K = int(os.getenv("MAX_TOP_K", "20"))                   # max retrieval results
+RATE_LIMIT_RPM = int(os.getenv("RATE_LIMIT_RPM", "60"))  # requests per minute
+RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))  # max burst in 1 second
+MAX_QUERY_LENGTH = int(os.getenv("MAX_QUERY_LENGTH", "2000"))  # max chars per query
+MAX_TOP_K = int(os.getenv("MAX_TOP_K", "20"))  # max retrieval results
 
 # CORS origins — comma-separated, empty = allow all (dev mode)
 _raw_origins = os.getenv("CORS_ORIGINS", "").strip()
-CORS_ORIGINS: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()] if _raw_origins else []
+CORS_ORIGINS: list[str] = (
+    [o.strip() for o in _raw_origins.split(",") if o.strip()] if _raw_origins else []
+)
 
 AUTH_ENABLED = len(API_KEYS) > 0
 

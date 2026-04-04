@@ -31,17 +31,17 @@ OUTPUT = BASE_DIR / "data" / "finetune" / "entity_pairs.jsonl"
 # Technical entity patterns (no spaCy needed — regex is faster and domain-specific)
 ENTITY_PATTERNS = [
     # AWS services
-    r'\b(Amazon\s+\w+|AWS\s+\w+|S3|EC2|Lambda|DynamoDB|SageMaker|CloudFormation|ECS|EKS|RDS|SNS|SQS|IAM|VPC|CloudWatch|Kinesis|Redshift|Glue|Athena|EMR|Step\s+Functions)\b',
+    r"\b(Amazon\s+\w+|AWS\s+\w+|S3|EC2|Lambda|DynamoDB|SageMaker|CloudFormation|ECS|EKS|RDS|SNS|SQS|IAM|VPC|CloudWatch|Kinesis|Redshift|Glue|Athena|EMR|Step\s+Functions)\b",
     # ML/AI terms
-    r'\b(transformer|attention\s+mechanism|BERT|GPT|LLM|embedding|fine-tuning|LoRA|RAG|retrieval|reranker|cross-encoder|bi-encoder|tokenizer|softmax|gradient\s+descent|backpropagation|neural\s+network|CNN|RNN|LSTM|GAN|VAE|diffusion|reinforcement\s+learning)\b',
+    r"\b(transformer|attention\s+mechanism|BERT|GPT|LLM|embedding|fine-tuning|LoRA|RAG|retrieval|reranker|cross-encoder|bi-encoder|tokenizer|softmax|gradient\s+descent|backpropagation|neural\s+network|CNN|RNN|LSTM|GAN|VAE|diffusion|reinforcement\s+learning)\b",
     # Infrastructure
-    r'\b(Docker|Kubernetes|Terraform|Ansible|Jenkins|GitHub\s+Actions|CI/CD|microservices|load\s+balancer|auto\s*scaling|serverless|container|pod|node|cluster|ingress|service\s+mesh)\b',
+    r"\b(Docker|Kubernetes|Terraform|Ansible|Jenkins|GitHub\s+Actions|CI/CD|microservices|load\s+balancer|auto\s*scaling|serverless|container|pod|node|cluster|ingress|service\s+mesh)\b",
     # Data
-    r'\b(PostgreSQL|MySQL|MongoDB|Redis|Elasticsearch|Apache\s+Kafka|Apache\s+Spark|Hadoop|ChromaDB|Pinecone|Weaviate|FAISS|vector\s+database|data\s+lake|data\s+warehouse|ETL|CDC)\b',
+    r"\b(PostgreSQL|MySQL|MongoDB|Redis|Elasticsearch|Apache\s+Kafka|Apache\s+Spark|Hadoop|ChromaDB|Pinecone|Weaviate|FAISS|vector\s+database|data\s+lake|data\s+warehouse|ETL|CDC)\b",
     # Python/Programming
-    r'\b(FastAPI|Flask|Django|React|Vue\.js|PyTorch|TensorFlow|pandas|numpy|scikit-learn|sentence-transformers|HuggingFace|Transformers)\b',
+    r"\b(FastAPI|Flask|Django|React|Vue\.js|PyTorch|TensorFlow|pandas|numpy|scikit-learn|sentence-transformers|HuggingFace|Transformers)\b",
     # Concepts
-    r'\b(CAP\s+theorem|ACID|BASE|MapReduce|sharding|partitioning|replication|consensus|Raft|Paxos|eventual\s+consistency|strong\s+consistency|idempotency|circuit\s+breaker|rate\s+limiting|caching|CDN)\b',
+    r"\b(CAP\s+theorem|ACID|BASE|MapReduce|sharding|partitioning|replication|consensus|Raft|Paxos|eventual\s+consistency|strong\s+consistency|idempotency|circuit\s+breaker|rate\s+limiting|caching|CDN)\b",
 ]
 
 COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in ENTITY_PATTERNS]
@@ -74,12 +74,14 @@ def load_corpus() -> list[dict]:
             offset=offset,
             include=["documents", "metadatas"],
         )
-        for doc, meta in zip(result["documents"], result["metadatas"]):
-            all_docs.append({
-                "text": doc,
-                "source": meta.get("source", ""),
-                "category": meta.get("category", ""),
-            })
+        for doc, meta in zip(result["documents"], result["metadatas"], strict=False):
+            all_docs.append(
+                {
+                    "text": doc,
+                    "source": meta.get("source", ""),
+                    "category": meta.get("category", ""),
+                }
+            )
     return all_docs
 
 
@@ -120,14 +122,16 @@ def generate_entity_query_pairs(
         for chunk in entity_chunks[:3]:
             for template in query_templates[:2]:
                 query = template.format(entity)
-                pairs.append({
-                    "query": query,
-                    "positive": chunk["text"],
-                    "source": chunk["source"],
-                    "category": chunk["category"],
-                    "strategy": "entity_query",
-                    "entity": entity,
-                })
+                pairs.append(
+                    {
+                        "query": query,
+                        "positive": chunk["text"],
+                        "source": chunk["source"],
+                        "category": chunk["category"],
+                        "strategy": "entity_query",
+                        "entity": entity,
+                    }
+                )
                 if len(pairs) >= max_pairs:
                     break
             if len(pairs) >= max_pairs:
@@ -163,14 +167,16 @@ def generate_entity_relationship_pairs(
                 if e1.lower() == e2.lower():
                     continue
                 query = f"How does {e1} relate to {e2}?"
-                pairs.append({
-                    "query": query,
-                    "positive": chunk["text"],
-                    "source": chunk["source"],
-                    "category": chunk["category"],
-                    "strategy": "entity_relationship",
-                    "entity": f"{e1} + {e2}",
-                })
+                pairs.append(
+                    {
+                        "query": query,
+                        "positive": chunk["text"],
+                        "source": chunk["source"],
+                        "category": chunk["category"],
+                        "strategy": "entity_relationship",
+                        "entity": f"{e1} + {e2}",
+                    }
+                )
                 if len(pairs) >= max_pairs:
                     return pairs
 
@@ -191,10 +197,10 @@ def filter_with_reranker(
 
     scored = []
     for i in range(0, len(pairs), batch_size):
-        batch = pairs[i:i + batch_size]
+        batch = pairs[i : i + batch_size]
         inputs = [(p["query"], p["positive"]) for p in batch]
         scores = reranker.predict(inputs, show_progress_bar=False)
-        for pair, score in zip(batch, scores):
+        for pair, score in zip(batch, scores, strict=False):
             pair["reranker_score"] = float(score)
             scored.append(pair)
 
@@ -205,8 +211,11 @@ def filter_with_reranker(
     avg_kept = np.mean([p["reranker_score"] for p in kept]) if kept else 0
     logger.info(
         "Reranker: %d/%d kept (%.1f%%), avg=%.3f, avg_kept=%.3f",
-        len(kept), len(scored), 100 * len(kept) / max(len(scored), 1),
-        avg_all, avg_kept,
+        len(kept),
+        len(scored),
+        100 * len(kept) / max(len(scored), 1),
+        avg_all,
+        avg_kept,
     )
     return kept
 
@@ -225,6 +234,7 @@ def run(max_pairs: int = 3000, min_score: float = 0.3, output: Path = OUTPUT):
 
     # Deduplicate
     import hashlib
+
     seen = set()
     unique = []
     for p in filtered:
@@ -239,12 +249,18 @@ def run(max_pairs: int = 3000, min_score: float = 0.3, output: Path = OUTPUT):
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w", encoding="utf-8") as f:
         for p in unique:
-            f.write(json.dumps({
-                "query": p["query"],
-                "positive": p["positive"],
-                "source": p["source"],
-                "category": p["category"],
-            }, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "query": p["query"],
+                        "positive": p["positive"],
+                        "source": p["source"],
+                        "category": p["category"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
 
     logger.info("Saved %d entity pairs to %s", len(unique), output)
     return output

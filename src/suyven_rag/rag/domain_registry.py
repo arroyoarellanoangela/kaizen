@@ -14,11 +14,12 @@ Suyven is the base engine. Domains are specializations:
 Persistence: domain configs stored in data/domains/<slug>/config.json
 """
 
+import contextlib
 import json
 import logging
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,16 +37,17 @@ DOMAINS_DIR = BASE_DIR / "data" / "domains"
 @dataclass
 class DomainConfig:
     """Configuration for a knowledge domain."""
-    slug: str                          # URL-safe identifier (e.g., "oncologia")
-    name: str                          # Human name (e.g., "Oncologia")
-    description: str = ""              # What this domain covers
-    language: str = "auto"             # Default response language ("auto", "es", "en", etc.)
-    system_prompt: str = ""            # Domain-specific system prompt (empty = use base)
+
+    slug: str  # URL-safe identifier (e.g., "oncologia")
+    name: str  # Human name (e.g., "Oncologia")
+    description: str = ""  # What this domain covers
+    language: str = "auto"  # Default response language ("auto", "es", "en", etc.)
+    system_prompt: str = ""  # Domain-specific system prompt (empty = use base)
     categories: list[str] = field(default_factory=list)  # Expected data categories
-    created_at: str = ""               # ISO timestamp
-    updated_at: str = ""               # ISO timestamp
-    chunk_count: int = 0               # Cached count (updated on ingest)
-    collection_name: str = ""          # ChromaDB collection name
+    created_at: str = ""  # ISO timestamp
+    updated_at: str = ""  # ISO timestamp
+    chunk_count: int = 0  # Cached count (updated on ingest)
+    collection_name: str = ""  # ChromaDB collection name
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +150,7 @@ def create_domain(
     if slug in _domains:
         raise ValueError(f"Domain '{slug}' already exists")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     collection_name = f"domain_{slug}"
 
     config = DomainConfig(
@@ -195,7 +197,7 @@ def update_domain(slug: str, **kwargs: Any) -> DomainConfig:
     for k, v in kwargs.items():
         if k in allowed:
             setattr(config, k, v)
-    config.updated_at = datetime.now(timezone.utc).isoformat()
+    config.updated_at = datetime.now(UTC).isoformat()
     _save_config(config)
     _domains[slug] = config
     return config
@@ -203,17 +205,15 @@ def update_domain(slug: str, **kwargs: Any) -> DomainConfig:
 
 def delete_domain(slug: str) -> None:
     """Delete a domain and its config. Does NOT delete ChromaDB data."""
-    config = get_domain(slug)
+    get_domain(slug)  # raises KeyError if not found
     path = _config_path(slug)
     if path.exists():
         path.unlink()
     # Remove empty dir
     domain_dir = DOMAINS_DIR / slug
     if domain_dir.exists():
-        try:
+        with contextlib.suppress(OSError):
             domain_dir.rmdir()
-        except OSError:
-            pass  # dir not empty, leave it
     _domains.pop(slug, None)
     logger.info("Deleted domain: %s", slug)
 
@@ -235,24 +235,113 @@ def get_domain_collection_name(slug: str) -> str:
 # ---------------------------------------------------------------------------
 
 _DOMAIN_KEYWORDS: dict[str, list[str]] = {
-    "medicina": ["cancer", "tumor", "oncologia", "diagnostico", "paciente", "tratamiento",
-                 "farmaco", "clinico", "sintoma", "enfermedad", "hospital", "cirugia",
-                 "medical", "patient", "diagnosis", "treatment", "drug", "clinical",
-                 "disease", "symptom", "surgery", "therapy", "pathology"],
-    "medioambiente": ["clima", "contaminacion", "emisiones", "co2", "biodiversidad",
-                      "ecosistema", "sostenible", "residuos", "reciclaje", "deforestacion",
-                      "climate", "pollution", "emissions", "biodiversity", "ecosystem",
-                      "sustainable", "waste", "recycling", "deforestation", "carbon"],
-    "finanzas": ["inversion", "mercado", "accion", "bono", "riesgo", "portfolio",
-                 "rendimiento", "inflacion", "banco", "credito", "fintech",
-                 "investment", "market", "stock", "bond", "risk", "portfolio",
-                 "yield", "inflation", "bank", "credit"],
-    "derecho": ["ley", "contrato", "sentencia", "tribunal", "demanda", "recurso",
-                "jurisprudencia", "normativa", "regulacion", "compliance",
-                "law", "contract", "court", "lawsuit", "regulation", "legal"],
-    "ingenieria": ["software", "api", "database", "algorithm", "deploy", "server",
-                   "framework", "architecture", "microservice", "kubernetes", "docker",
-                   "cloud", "aws", "devops", "ci/cd", "pipeline", "testing"],
+    "medicina": [
+        "cancer",
+        "tumor",
+        "oncologia",
+        "diagnostico",
+        "paciente",
+        "tratamiento",
+        "farmaco",
+        "clinico",
+        "sintoma",
+        "enfermedad",
+        "hospital",
+        "cirugia",
+        "medical",
+        "patient",
+        "diagnosis",
+        "treatment",
+        "drug",
+        "clinical",
+        "disease",
+        "symptom",
+        "surgery",
+        "therapy",
+        "pathology",
+    ],
+    "medioambiente": [
+        "clima",
+        "contaminacion",
+        "emisiones",
+        "co2",
+        "biodiversidad",
+        "ecosistema",
+        "sostenible",
+        "residuos",
+        "reciclaje",
+        "deforestacion",
+        "climate",
+        "pollution",
+        "emissions",
+        "biodiversity",
+        "ecosystem",
+        "sustainable",
+        "waste",
+        "recycling",
+        "deforestation",
+        "carbon",
+    ],
+    "finanzas": [
+        "inversion",
+        "mercado",
+        "accion",
+        "bono",
+        "riesgo",
+        "portfolio",
+        "rendimiento",
+        "inflacion",
+        "banco",
+        "credito",
+        "fintech",
+        "investment",
+        "market",
+        "stock",
+        "bond",
+        "risk",
+        "portfolio",
+        "yield",
+        "inflation",
+        "bank",
+        "credit",
+    ],
+    "derecho": [
+        "ley",
+        "contrato",
+        "sentencia",
+        "tribunal",
+        "demanda",
+        "recurso",
+        "jurisprudencia",
+        "normativa",
+        "regulacion",
+        "compliance",
+        "law",
+        "contract",
+        "court",
+        "lawsuit",
+        "regulation",
+        "legal",
+    ],
+    "ingenieria": [
+        "software",
+        "api",
+        "database",
+        "algorithm",
+        "deploy",
+        "server",
+        "framework",
+        "architecture",
+        "microservice",
+        "kubernetes",
+        "docker",
+        "cloud",
+        "aws",
+        "devops",
+        "ci/cd",
+        "pipeline",
+        "testing",
+    ],
 }
 
 

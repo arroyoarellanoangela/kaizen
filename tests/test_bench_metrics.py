@@ -15,7 +15,6 @@ from suyven_rag.rag.bench_metrics import (
     recall_at_k,
 )
 
-
 # -----------------------------------------------------------------------
 # binary_relevance
 # -----------------------------------------------------------------------
@@ -145,10 +144,17 @@ class TestPrecision:
 
 class TestKeywordCoverage:
     def test_full_coverage(self):
-        assert keyword_coverage("RAG uses retrieval and generation", ["rag", "retrieval", "generation"]) == 1.0
+        assert (
+            keyword_coverage(
+                "RAG uses retrieval and generation", ["rag", "retrieval", "generation"]
+            )
+            == 1.0
+        )
 
     def test_partial_coverage(self):
-        assert keyword_coverage("RAG uses retrieval", ["rag", "retrieval", "generation"]) == pytest.approx(2 / 3)
+        assert keyword_coverage(
+            "RAG uses retrieval", ["rag", "retrieval", "generation"]
+        ) == pytest.approx(2 / 3)
 
     def test_no_coverage(self):
         assert keyword_coverage("hello world", ["rag", "retrieval"]) == 0.0

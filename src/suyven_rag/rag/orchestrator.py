@@ -6,14 +6,14 @@ V2.2: hybrid search (BM25 + dense + reranker), multi-tool retrieval.
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
 from .config import LLM_MODEL, RERANKER_BATCH_SIZE, TOP_K
 from .index_registry import get_index, route_to_index
-from .llm import quick_complete, stream_chat
+from .llm import quick_complete
 from .model_registry import get_reranker
 
 logger = logging.getLogger(__name__)
@@ -45,15 +45,15 @@ _SUMMARY_KEYWORDS = re.compile(
 
 @dataclass
 class RoutePlan:
-    indexes: list[str]           # which collections to query
-    embed_model: str             # which embed model to use
-    use_reranker: bool           # whether to apply cross-encoder
-    reranker_model: str          # which reranker to use
-    llm_model: str               # which LLM for generation
-    mode: str                    # "answer" | "summary" | "code"
-    top_k: int                   # how many results to return
-    reason: str                  # why this route was chosen (traceability)
-    use_bm25: bool = True        # whether to use BM25 hybrid search
+    indexes: list[str]  # which collections to query
+    embed_model: str  # which embed model to use
+    use_reranker: bool  # whether to apply cross-encoder
+    reranker_model: str  # which reranker to use
+    llm_model: str  # which LLM for generation
+    mode: str  # "answer" | "summary" | "code"
+    top_k: int  # how many results to return
+    reason: str  # why this route was chosen (traceability)
+    use_bm25: bool = True  # whether to use BM25 hybrid search
 
 
 # ---------------------------------------------------------------------------
@@ -153,16 +153,18 @@ def _bm25_search(
         if scores[idx] <= 0:
             continue
         meta = metas[idx]
-        candidates.append({
-            "text": docs[idx],
-            "category": meta.get("category", ""),
-            "subcategory": meta.get("subcategory", ""),
-            "source": meta.get("source", ""),
-            "file_type": meta.get("file_type", ""),
-            "bm25_score": round(float(scores[idx]), 4),
-            "bi_score": 0.0,
-            "score": 0.0,
-        })
+        candidates.append(
+            {
+                "text": docs[idx],
+                "category": meta.get("category", ""),
+                "subcategory": meta.get("subcategory", ""),
+                "source": meta.get("source", ""),
+                "file_type": meta.get("file_type", ""),
+                "bm25_score": round(float(scores[idx]), 4),
+                "bi_score": 0.0,
+                "score": 0.0,
+            }
+        )
 
     return candidates
 
@@ -246,7 +248,13 @@ def _fetch_adjacent_chunks(
 
         if adjacent_texts:
             # Prepend/append adjacent context
-            full_text = "\n".join(adjacent_texts[:window]) + "\n" + r["text"] + "\n" + "\n".join(adjacent_texts[window:])
+            full_text = (
+                "\n".join(adjacent_texts[:window])
+                + "\n"
+                + r["text"]
+                + "\n"
+                + "\n".join(adjacent_texts[window:])
+            )
             r = {**r, "text": full_text.strip(), "has_adjacent": True}
 
         enriched.append(r)
@@ -270,9 +278,13 @@ def expand_query(query: str) -> list[str]:
     """
     try:
         raw = quick_complete(_EXPAND_PROMPT.format(query=query), max_tokens=150, timeout=10)
-        lines = [l.strip() for l in raw.strip().split("\n") if l.strip() and len(l.strip()) > 5]
+        lines = [
+            line.strip()
+            for line in raw.strip().split("\n")
+            if line.strip() and len(line.strip()) > 5
+        ]
         # Filter out lines that are just the original query
-        expansions = [l for l in lines if l.lower() != query.lower()]
+        expansions = [line for line in lines if line.lower() != query.lower()]
         return expansions[:2]
     except Exception as e:
         logger.warning("[orchestrator] query expansion failed: %s", e)
@@ -305,7 +317,11 @@ def execute_search(
         overfetch = max(overfetch, 8)
 
     where = {"category": category} if category else None
-    fetch_n = min(route.top_k * overfetch, col.count()) if route.use_reranker else min(route.top_k, col.count())
+    fetch_n = (
+        min(route.top_k * overfetch, col.count())
+        if route.use_reranker
+        else min(route.top_k, col.count())
+    )
 
     # Stage 1 — Dense (bi-encoder) search with original query
     results = col.query(query_texts=[query], n_results=fetch_n, where=where)
@@ -315,18 +331,21 @@ def execute_search(
             results["documents"][0],
             results["metadatas"][0],
             results["distances"][0],
+            strict=False,
         ):
-            dense_candidates.append({
-                "text": doc,
-                "category": meta.get("category", ""),
-                "subcategory": meta.get("subcategory", ""),
-                "source": meta.get("source", ""),
-                "file_type": meta.get("file_type", ""),
-                "chunk_index": meta.get("chunk_index", "-1"),
-                "bi_score": round(1.0 - dist, 4),
-                "bm25_score": 0.0,
-                "score": round(1.0 - dist, 4),
-            })
+            dense_candidates.append(
+                {
+                    "text": doc,
+                    "category": meta.get("category", ""),
+                    "subcategory": meta.get("subcategory", ""),
+                    "source": meta.get("source", ""),
+                    "file_type": meta.get("file_type", ""),
+                    "chunk_index": meta.get("chunk_index", "-1"),
+                    "bi_score": round(1.0 - dist, 4),
+                    "bm25_score": 0.0,
+                    "score": round(1.0 - dist, 4),
+                }
+            )
 
     # Stage 1b is handled post-reranking (see late fusion below)
 
@@ -337,7 +356,8 @@ def execute_search(
             bm25_candidates = _bm25_search(query, col, fetch_n, where)
             logger.info(
                 "[orchestrator] BM25 found %d candidates (dense: %d)",
-                len(bm25_candidates), len(dense_candidates),
+                len(bm25_candidates),
+                len(dense_candidates),
             )
         except Exception as e:
             logger.warning("[orchestrator] BM25 search failed: %s", e)
@@ -353,8 +373,10 @@ def execute_search(
         try:
             reranker = get_reranker(route.reranker_model)
             pairs = [[query, c["text"]] for c in candidates]
-            scores = reranker.predict(pairs, batch_size=RERANKER_BATCH_SIZE, show_progress_bar=False)
-            for c, score in zip(candidates, scores):
+            scores = reranker.predict(
+                pairs, batch_size=RERANKER_BATCH_SIZE, show_progress_bar=False
+            )
+            for c, score in zip(candidates, scores, strict=False):
                 c["score"] = round(float(score), 4)
             candidates.sort(key=lambda x: x["score"], reverse=True)
         except Exception:
@@ -371,7 +393,7 @@ def execute_search(
         if count < MAX_PER_SOURCE:
             diverse_candidates.append(c)
             source_counts[src] = count + 1
-    primary_results = diverse_candidates[:route.top_k]
+    primary_results = diverse_candidates[: route.top_k]
 
     # Stage 5 — Late fusion with query expansion
     # Run full independent searches for each expansion query,
@@ -383,22 +405,28 @@ def execute_search(
             for exp_q in expansions:
                 try:
                     # Recursive call WITHOUT expansion to avoid infinite loop
-                    exp_candidates = execute_search(exp_q, route, category=category, use_expansion=False)
+                    exp_candidates = execute_search(
+                        exp_q, route, category=category, use_expansion=False
+                    )
                     expansion_results.extend(exp_candidates)
                 except Exception as e:
                     logger.warning("[orchestrator] expansion search failed: %s", e)
             if expansion_results:
                 # RRF merge: primary results + expansion results
                 primary_results = _merge_hybrid(
-                    primary_results, expansion_results, route.top_k,
+                    primary_results,
+                    expansion_results,
+                    route.top_k,
                 )
                 # Re-score merged results with reranker against ORIGINAL query
                 if route.use_reranker and primary_results:
                     try:
                         reranker = get_reranker(route.reranker_model)
                         pairs = [[query, c["text"]] for c in primary_results]
-                        scores = reranker.predict(pairs, batch_size=RERANKER_BATCH_SIZE, show_progress_bar=False)
-                        for c, score in zip(primary_results, scores):
+                        scores = reranker.predict(
+                            pairs, batch_size=RERANKER_BATCH_SIZE, show_progress_bar=False
+                        )
+                        for c, score in zip(primary_results, scores, strict=False):
                             c["score"] = round(float(score), 4)
                         primary_results.sort(key=lambda x: x["score"], reverse=True)
                     except Exception:
@@ -408,7 +436,7 @@ def execute_search(
                     len(expansion_results),
                 )
 
-    return primary_results[:route.top_k]
+    return primary_results[: route.top_k]
 
 
 def format_context(results: list[dict[str, Any]]) -> str:
@@ -418,7 +446,11 @@ def format_context(results: list[dict[str, Any]]) -> str:
 
     parts = []
     for r in results:
-        path = f"{r['category']}/{r['source']}" if r["subcategory"] == "" else f"{r['category']}/{r['subcategory']}/{r['source']}"
+        path = (
+            f"{r['category']}/{r['source']}"
+            if r["subcategory"] == ""
+            else f"{r['category']}/{r['subcategory']}/{r['source']}"
+        )
         parts.append(f"[{path}] (relevance: {r['score']:.0%})\n{r['text']}")
 
     return "\n\n---\n\n".join(parts)

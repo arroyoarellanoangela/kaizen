@@ -8,7 +8,7 @@ Provider detection:
 
 import json
 import logging
-from typing import Generator
+from collections.abc import Generator
 
 import requests as req
 
@@ -48,8 +48,12 @@ def _stream_ollama(
 
 
 def _stream_openai(
-    messages: list[dict], model: str, timeout: int,
-    *, api_url: str = "", api_key: str = "",
+    messages: list[dict],
+    model: str,
+    timeout: int,
+    *,
+    api_url: str = "",
+    api_key: str = "",
 ) -> Generator[str, None, None]:
     """Stream tokens from any OpenAI-compatible API (DeepSeek, Groq, Gemini, etc.)."""
     url = api_url or LLM_API_URL
@@ -178,10 +182,7 @@ def stream_chat(
     _prompt = system_prompt or SYSTEM_PROMPT
 
     # Build message — if no context, just send the question directly
-    if context:
-        user_content = f"Context:\n{context}\n\nQuestion: {query}"
-    else:
-        user_content = query
+    user_content = f"Context:\n{context}\n\nQuestion: {query}" if context else query
 
     messages = [
         {"role": "system", "content": _prompt},
@@ -190,9 +191,7 @@ def stream_chat(
 
     stream_fn = _PROVIDERS.get(_provider)
     if stream_fn is None:
-        raise ValueError(
-            f"Unknown LLM_PROVIDER '{_provider}'. Use: {list(_PROVIDERS.keys())}"
-        )
+        raise ValueError(f"Unknown LLM_PROVIDER '{_provider}'. Use: {list(_PROVIDERS.keys())}")
 
     logger.info("LLM stream: provider=%s model=%s", _provider, _model)
     yield from stream_fn(messages, _model, timeout, api_url=api_url, api_key=api_key)

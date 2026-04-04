@@ -76,12 +76,14 @@ def search_with_model(model, queries, collection, top_k=5):
             n_results=top_k,
             include=["documents", "metadatas", "distances"],
         )
-        results.append({
-            "query": query,
-            "docs": result["documents"][0],
-            "metadatas": result["metadatas"][0],
-            "distances": result["distances"][0],
-        })
+        results.append(
+            {
+                "query": query,
+                "docs": result["documents"][0],
+                "metadatas": result["metadatas"][0],
+                "distances": result["distances"][0],
+            }
+        )
     return results
 
 
@@ -92,7 +94,7 @@ def score_with_reranker(queries, docs_list):
     reranker = get_reranker()
     all_scores = []
 
-    for query, docs in zip(queries, docs_list):
+    for query, docs in zip(queries, docs_list, strict=False):
         pairs = [(query, doc) for doc in docs]
         scores = reranker.predict(pairs, show_progress_bar=False)
         all_scores.append(scores.tolist())
@@ -116,9 +118,15 @@ def compare(base_results, ft_results, base_scores, ft_scores):
 
     print(f"\n{'Metric':<30} {'Base':>10} {'FineTuned':>10} {'Delta':>10}")
     print("-" * 60)
-    print(f"{'Avg reranker score @1':<30} {base_avg_top1:>10.3f} {ft_avg_top1:>10.3f} {ft_avg_top1 - base_avg_top1:>+10.3f}")
-    print(f"{'Avg reranker score @5':<30} {base_avg_top5:>10.3f} {ft_avg_top5:>10.3f} {ft_avg_top5 - base_avg_top5:>+10.3f}")
-    print(f"{'Avg best score in top-5':<30} {base_avg_max:>10.3f} {ft_avg_max:>10.3f} {ft_avg_max - base_avg_max:>+10.3f}")
+    print(
+        f"{'Avg reranker score @1':<30} {base_avg_top1:>10.3f} {ft_avg_top1:>10.3f} {ft_avg_top1 - base_avg_top1:>+10.3f}"
+    )
+    print(
+        f"{'Avg reranker score @5':<30} {base_avg_top5:>10.3f} {ft_avg_top5:>10.3f} {ft_avg_top5 - base_avg_top5:>+10.3f}"
+    )
+    print(
+        f"{'Avg best score in top-5':<30} {base_avg_max:>10.3f} {ft_avg_max:>10.3f} {ft_avg_max - base_avg_max:>+10.3f}"
+    )
 
     # Per-query comparison
     wins = 0

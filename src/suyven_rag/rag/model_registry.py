@@ -5,8 +5,7 @@ Future versions can register multiple models per type.
 """
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 import torch
 from sentence_transformers import CrossEncoder, SentenceTransformer
@@ -24,9 +23,9 @@ logger = logging.getLogger(__name__)
 class ModelInfo:
     name: str
     model_id: str
-    model_type: str          # "embed" | "reranker"
+    model_type: str  # "embed" | "reranker"
     precision: str = "fp16"  # "fp32" | "fp16"
-    device: str = "auto"     # "auto" | "cuda" | "cpu"
+    device: str = "auto"  # "auto" | "cuda" | "cpu"
 
 
 # ---------------------------------------------------------------------------

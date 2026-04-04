@@ -1,24 +1,31 @@
 """ChromaDB vector store — embed with sentence-transformers (direct GPU)."""
 
+import contextlib
 import hashlib
 import logging
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
-
-logger = logging.getLogger(__name__)
 
 import chromadb
 import requests
 from sentence_transformers import SentenceTransformer
 
-from .config import ADD_BATCH_SIZE, CHROMA_DIR, COLLECTION_NAME, EMBED_BATCH, EMBED_MODEL, OLLAMA_URL
+from .config import (
+    ADD_BATCH_SIZE,
+    CHROMA_DIR,
+    COLLECTION_NAME,
+    EMBED_BATCH,
+    EMBED_MODEL,
+    OLLAMA_URL,
+)
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Ollama lifecycle  (still used for LLM chat, not for embeddings)
 # ---------------------------------------------------------------------------
+
 
 def ensure_ollama(timeout: int = 30) -> None:
     """Start Ollama if it is not already running."""
@@ -53,6 +60,7 @@ def ensure_ollama(timeout: int = 30) -> None:
 
 _model: SentenceTransformer | None = None
 
+
 def get_embed_model() -> SentenceTransformer:
     """Lazy-load the embedding model.
 
@@ -62,6 +70,7 @@ def get_embed_model() -> SentenceTransformer:
     global _model
     if _model is None:
         import torch
+
         _model = SentenceTransformer(EMBED_MODEL)
         if torch.cuda.is_available():
             _model = _model.to("cuda").half()  # FP16: +109% throughput, −48% VRAM
@@ -82,6 +91,7 @@ def embed(text: str) -> list[float]:
 
 class STEmbedFn(chromadb.EmbeddingFunction):
     """ChromaDB embedding function using sentence-transformers."""
+
     def __call__(self, input: list[str]) -> list[list[float]]:
         return embed_batch(input)
 
@@ -89,6 +99,7 @@ class STEmbedFn(chromadb.EmbeddingFunction):
 # ---------------------------------------------------------------------------
 # Collection
 # ---------------------------------------------------------------------------
+
 
 def get_collection() -> chromadb.Collection:
     """DEPRECATED: Use index_registry.get_index() instead.
@@ -107,10 +118,8 @@ def reset_collection() -> chromadb.Collection:
     Kept for backward compatibility with benchmark scripts."""
     logger.warning("reset_collection() is deprecated — use index_registry.reset_index()")
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    try:
+    with contextlib.suppress(Exception):
         client.delete_collection(COLLECTION_NAME)
-    except Exception:
-        pass
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
         embedding_function=STEmbedFn(),
@@ -121,6 +130,7 @@ def reset_collection() -> chromadb.Collection:
 # ---------------------------------------------------------------------------
 # Indexing
 # ---------------------------------------------------------------------------
+
 
 def _chunk_id(path: Path, idx: int, content: str) -> str:
     h = hashlib.md5(content.encode()).hexdigest()[:8]
@@ -160,18 +170,20 @@ def add_chunks(
 
     # Filter to only new chunks
     ids, docs, metas = [], [], []
-    for idx, (cid, chunk) in enumerate(zip(all_ids, chunks)):
+    for idx, (cid, chunk) in enumerate(zip(all_ids, chunks, strict=False)):
         if cid in existing_ids:
             continue
         ids.append(cid)
         docs.append(chunk)
-        metas.append({
-            "category": category,
-            "subcategory": subcategory,
-            "source": path.stem,
-            "file_type": path.suffix.lstrip("."),
-            "chunk_index": str(idx),
-        })
+        metas.append(
+            {
+                "category": category,
+                "subcategory": subcategory,
+                "source": path.stem,
+                "file_type": path.suffix.lstrip("."),
+                "chunk_index": str(idx),
+            }
+        )
 
     skipped = len(chunks) - len(ids)
 

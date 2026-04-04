@@ -44,10 +44,12 @@ _TASK_REGISTRY: dict[str, type["EvalTask"]] = {}
 
 def register_task(name: str):
     """Decorator to register an eval task."""
+
     def decorator(cls):
         _TASK_REGISTRY[name] = cls
         cls.task_name = name
         return cls
+
     return decorator
 
 
@@ -62,6 +64,7 @@ def list_tasks() -> list[dict]:
 # ---------------------------------------------------------------------------
 # Base task
 # ---------------------------------------------------------------------------
+
 
 class EvalTask(ABC):
     """Base class for evaluation tasks."""
@@ -87,6 +90,7 @@ class EvalTask(ABC):
 # ---------------------------------------------------------------------------
 # Task 1: Intrinsic discrimination (pos vs neg)
 # ---------------------------------------------------------------------------
+
 
 @register_task("intrinsic")
 class IntrinsicDiscrimination(EvalTask):
@@ -140,6 +144,7 @@ class IntrinsicDiscrimination(EvalTask):
 # ---------------------------------------------------------------------------
 # Task 2: Retrieval quality (search ChromaDB, score with reranker)
 # ---------------------------------------------------------------------------
+
 
 @register_task("retrieval")
 class RetrievalQuality(EvalTask):
@@ -236,6 +241,7 @@ class RetrievalQuality(EvalTask):
 # Task 3: Embedding space quality
 # ---------------------------------------------------------------------------
 
+
 @register_task("embedding_space")
 class EmbeddingSpaceQuality(EvalTask):
     """Measures embedding space properties: isotropy, cluster separation."""
@@ -243,13 +249,18 @@ class EmbeddingSpaceQuality(EvalTask):
     def run(self) -> dict[str, Any]:
         # Sample diverse texts from ChromaDB
         from suyven_rag.rag.index_registry import get_index
+
         col = get_index()
         result = col.get(limit=500, include=["documents", "metadatas"])
         texts = result["documents"]
         categories = [m.get("category", "unknown") for m in result["metadatas"]]
 
-        base_emb = self.base.encode(texts, show_progress_bar=False, convert_to_numpy=True).astype(np.float32)
-        ft_emb = self.ft.encode(texts, show_progress_bar=False, convert_to_numpy=True).astype(np.float32)
+        base_emb = self.base.encode(texts, show_progress_bar=False, convert_to_numpy=True).astype(
+            np.float32
+        )
+        ft_emb = self.ft.encode(texts, show_progress_bar=False, convert_to_numpy=True).astype(
+            np.float32
+        )
 
         def analyze_space(embeddings, cats):
             # Isotropy: how uniformly distributed are embeddings?
@@ -312,6 +323,7 @@ class EmbeddingSpaceQuality(EvalTask):
 # Task 4: Latency benchmark
 # ---------------------------------------------------------------------------
 
+
 @register_task("latency")
 class LatencyBenchmark(EvalTask):
     """Measures inference latency for embedding generation."""
@@ -349,6 +361,7 @@ class LatencyBenchmark(EvalTask):
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
+
 
 def run_eval_suite(
     model_path: str | Path,
@@ -414,7 +427,8 @@ def print_results(results: dict[str, Any]) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Embedding model evaluation suite")
     parser.add_argument(
-        "--model", type=Path,
+        "--model",
+        type=Path,
         default=BASE_DIR / "data" / "finetune" / "checkpoints" / "merged_model",
     )
     parser.add_argument("--tasks", type=str, default=None, help="Comma-separated task names")

@@ -3,8 +3,6 @@
 import json
 import logging
 
-import pytest
-
 from suyven_rag.rag.observability import (
     JSONFormatter,
     Metrics,
@@ -13,7 +11,6 @@ from suyven_rag.rag.observability import (
     new_request_id,
     set_request_id,
 )
-
 
 # -----------------------------------------------------------------------
 # JSON Formatter
@@ -24,8 +21,13 @@ class TestJSONFormatter:
     def test_basic_output_is_valid_json(self):
         formatter = JSONFormatter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="hello world", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello world",
+            args=(),
+            exc_info=None,
         )
         line = formatter.format(record)
         parsed = json.loads(line)
@@ -36,8 +38,13 @@ class TestJSONFormatter:
     def test_includes_ts(self):
         formatter = JSONFormatter()
         record = logging.LogRecord(
-            name="x", level=logging.WARNING, pathname="", lineno=0,
-            msg="warn", args=(), exc_info=None,
+            name="x",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="warn",
+            args=(),
+            exc_info=None,
         )
         parsed = json.loads(formatter.format(record))
         assert "ts" in parsed
@@ -45,8 +52,13 @@ class TestJSONFormatter:
     def test_propagates_request_id(self):
         formatter = JSONFormatter()
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.request_id = "abc123"  # type: ignore[attr-defined]
         parsed = json.loads(formatter.format(record))
@@ -55,8 +67,13 @@ class TestJSONFormatter:
     def test_propagates_extra_fields(self):
         formatter = JSONFormatter()
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.method = "GET"  # type: ignore[attr-defined]
         record.path = "/api/health"  # type: ignore[attr-defined]
@@ -74,9 +91,15 @@ class TestJSONFormatter:
             raise ValueError("boom")
         except ValueError:
             import sys
+
             record = logging.LogRecord(
-                name="x", level=logging.ERROR, pathname="", lineno=0,
-                msg="error", args=(), exc_info=sys.exc_info(),
+                name="x",
+                level=logging.ERROR,
+                pathname="",
+                lineno=0,
+                msg="error",
+                args=(),
+                exc_info=sys.exc_info(),
             )
         parsed = json.loads(formatter.format(record))
         assert "exception" in parsed
@@ -85,8 +108,13 @@ class TestJSONFormatter:
     def test_no_request_id_if_not_set(self):
         formatter = JSONFormatter()
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         parsed = json.loads(formatter.format(record))
         assert "request_id" not in parsed
@@ -128,8 +156,13 @@ class TestRequestIdFilter:
         set_request_id("filter-test-456")
         f = RequestIdFilter()
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         f.filter(record)
         assert record.request_id == "filter-test-456"  # type: ignore[attr-defined]
@@ -138,8 +171,13 @@ class TestRequestIdFilter:
     def test_always_returns_true(self):
         f = RequestIdFilter()
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         assert f.filter(record) is True
 

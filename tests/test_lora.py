@@ -1,6 +1,5 @@
 """Tests for finetune/lora.py — LoRA implementation from scratch."""
 
-import math
 import tempfile
 from pathlib import Path
 
@@ -18,10 +17,10 @@ from suyven_rag.finetune.lora import (
     save_lora_weights,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 class ToyTransformerLayer(nn.Module):
     """Minimal transformer-like module with query/key/value projections."""
@@ -133,7 +132,7 @@ class TestLoRALinear:
         original = nn.Linear(128, 64)
         lora = LoRALinear(original, rank=8, alpha=16)
         assert lora.lora_A.shape == (8, 128)  # (rank, d_in)
-        assert lora.lora_B.shape == (64, 8)   # (d_out, rank)
+        assert lora.lora_B.shape == (64, 8)  # (d_out, rank)
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +191,6 @@ class TestGetLoRAParams:
 
 class TestCountParams:
     def test_counts_correct(self, toy_model):
-        total_before = sum(p.numel() for p in toy_model.parameters())
         inject_lora(toy_model, rank=4, alpha=8, target_modules=("query", "value"))
         counts = count_params(toy_model)
 
@@ -293,7 +291,7 @@ class TestSaveLoadLoRA:
             state = torch.load(path, weights_only=True)
 
             # Should only contain lora_A and lora_B keys
-            assert all("lora_A" in k or "lora_B" in k for k in state.keys())
+            assert all("lora_A" in k or "lora_B" in k for k in state)
             assert len(state) == 8  # 4 adapters * 2 matrices
 
 
@@ -362,7 +360,10 @@ class TestDataset:
         from suyven_rag.finetune.dataset import ContrastivePairsDataset, train_eval_split
 
         data = tmp_path / "pairs.jsonl"
-        lines = [f'{{"query":"q{i}","positive":"p{i}","source":"s","category":"c"}}\n' for i in range(100)]
+        lines = [
+            f'{{"query":"q{i}","positive":"p{i}","source":"s","category":"c"}}\n'
+            for i in range(100)
+        ]
         data.write_text("".join(lines))
 
         ds = ContrastivePairsDataset(data)
@@ -378,7 +379,9 @@ class TestDataset:
         from suyven_rag.finetune.dataset import ContrastivePairsDataset
 
         data = tmp_path / "pairs.jsonl"
-        lines = [f'{{"query":"q{i}","positive":"p{i}","source":"s","category":"c"}}\n' for i in range(50)]
+        lines = [
+            f'{{"query":"q{i}","positive":"p{i}","source":"s","category":"c"}}\n' for i in range(50)
+        ]
         data.write_text("".join(lines))
 
         ds = ContrastivePairsDataset(data, max_samples=10)

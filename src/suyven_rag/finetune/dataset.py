@@ -18,7 +18,7 @@ class ContrastivePairsDataset(Dataset):
 
     def __init__(self, path: Path, max_samples: int = 0):
         self.pairs: list[tuple[str, str]] = []
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -46,7 +46,7 @@ class TripletDataset(Dataset):
 
     def __init__(self, path: Path, max_samples: int = 0):
         self.triplets: list[tuple[str, str, str]] = []
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:

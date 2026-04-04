@@ -12,7 +12,6 @@ import argparse
 import json
 import logging
 import random
-import sys
 import time
 from pathlib import Path
 
@@ -49,12 +48,14 @@ def sample_chunks(n: int) -> list[dict]:
             offset=offset,
             include=["documents", "metadatas"],
         )
-        for doc, meta in zip(result["documents"], result["metadatas"]):
-            all_docs.append({
-                "text": doc,
-                "source": meta.get("source", ""),
-                "category": meta.get("category", ""),
-            })
+        for doc, meta in zip(result["documents"], result["metadatas"], strict=False):
+            all_docs.append(
+                {
+                    "text": doc,
+                    "source": meta.get("source", ""),
+                    "category": meta.get("category", ""),
+                }
+            )
 
     logger.info("Loaded %d chunks from ChromaDB", len(all_docs))
 
@@ -65,7 +66,7 @@ def sample_chunks(n: int) -> list[dict]:
         by_cat.setdefault(cat, []).append(doc)
 
     sampled = []
-    for cat, docs in by_cat.items():
+    for _cat, docs in by_cat.items():
         proportion = len(docs) / len(all_docs)
         cat_n = max(1, int(n * proportion))
         sampled.extend(random.sample(docs, min(cat_n, len(docs))))
@@ -102,7 +103,7 @@ def generate_questions(
             timeout=30,
         )
         if resp.status_code == 429:
-            wait = 2 ** attempt * 5  # 5s, 10s, 20s
+            wait = 2**attempt * 5  # 5s, 10s, 20s
             logger.debug("Rate limited, waiting %ds...", wait)
             time.sleep(wait)
             continue
@@ -140,12 +141,14 @@ def run(config: TrainConfig) -> Path:
                 model=LLM_MODEL,
             )
             for q in questions:
-                pairs.append({
-                    "query": q,
-                    "positive": chunk["text"],
-                    "source": chunk["source"],
-                    "category": chunk["category"],
-                })
+                pairs.append(
+                    {
+                        "query": q,
+                        "positive": chunk["text"],
+                        "source": chunk["source"],
+                        "category": chunk["category"],
+                    }
+                )
         except Exception as e:
             errors += 1
             if errors <= 5:
@@ -157,7 +160,10 @@ def run(config: TrainConfig) -> Path:
         if (i + 1) % batch_size == 0:
             logger.info(
                 "Progress: %d/%d chunks, %d pairs generated, %d errors",
-                i + 1, len(chunks), len(pairs), errors,
+                i + 1,
+                len(chunks),
+                len(pairs),
+                errors,
             )
             time.sleep(config.groq_delay_s)
 
@@ -168,7 +174,10 @@ def run(config: TrainConfig) -> Path:
 
     logger.info(
         "Done: %d pairs from %d chunks (%d errors). Saved to %s",
-        len(pairs), len(chunks), errors, output,
+        len(pairs),
+        len(chunks),
+        errors,
+        output,
     )
     return output
 

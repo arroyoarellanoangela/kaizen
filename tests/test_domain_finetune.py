@@ -1,6 +1,5 @@
 """Tests for finetune/domain_finetune.py — domain-specific embedding fine-tuning."""
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,7 +16,6 @@ from suyven_rag.finetune.domain_finetune import (
     sample_domain_chunks,
 )
 
-
 # -----------------------------------------------------------------------
 # Fixtures
 # -----------------------------------------------------------------------
@@ -27,28 +25,34 @@ def _make_chunks(n: int = 100) -> list[dict]:
     """Generate realistic test chunks."""
     chunks = []
     for i in range(n):
-        chunks.append({
-            "text": f"Sentence number {i} explains a concept. "
-                    f"This chunk covers topic {i} in detail with enough "
-                    f"content to be useful for training. The algorithm processes "
-                    f"data through multiple stages of transformation.",
-            "source": f"doc_{i % 10}",
-            "category": f"cat_{i % 5}",
-        })
+        chunks.append(
+            {
+                "text": f"Sentence number {i} explains a concept. "
+                f"This chunk covers topic {i} in detail with enough "
+                f"content to be useful for training. The algorithm processes "
+                f"data through multiple stages of transformation.",
+                "source": f"doc_{i % 10}",
+                "category": f"cat_{i % 5}",
+            }
+        )
     # Add some definition-style chunks
-    chunks.append({
-        "text": "Transformer Architecture is a neural network design that uses "
-                "self-attention mechanisms to process sequences in parallel. "
-                "Unlike RNNs, transformers can handle long-range dependencies.",
-        "source": "ml_guide",
-        "category": "ml",
-    })
-    chunks.append({
-        "text": "To configure a VPC with private subnets, you need to create "
-                "a NAT gateway in the public subnet and update route tables.",
-        "source": "aws_guide",
-        "category": "cloud",
-    })
+    chunks.append(
+        {
+            "text": "Transformer Architecture is a neural network design that uses "
+            "self-attention mechanisms to process sequences in parallel. "
+            "Unlike RNNs, transformers can handle long-range dependencies.",
+            "source": "ml_guide",
+            "category": "ml",
+        }
+    )
+    chunks.append(
+        {
+            "text": "To configure a VPC with private subnets, you need to create "
+            "a NAT gateway in the public subnet and update route tables.",
+            "source": "aws_guide",
+            "category": "cloud",
+        }
+    )
     return chunks
 
 
@@ -250,7 +254,7 @@ class TestDomainFinetuneResult:
 class TestRegisterDomainModel:
     @patch("rag.model_registry.register_embed_model")
     def test_registers_model(self, mock_register):
-        from suyven_rag.finetune.domain_finetune import register_domain_model, DOMAIN_FT_DIR
+        from suyven_rag.finetune.domain_finetune import DOMAIN_FT_DIR, register_domain_model
 
         merged = DOMAIN_FT_DIR / "test" / "checkpoints" / "merged_model"
         merged.mkdir(parents=True, exist_ok=True)
@@ -264,10 +268,12 @@ class TestRegisterDomainModel:
         finally:
             # Cleanup
             import shutil
+
             shutil.rmtree(DOMAIN_FT_DIR / "test", ignore_errors=True)
 
     def test_raises_on_missing_checkpoint(self):
         from suyven_rag.finetune.domain_finetune import register_domain_model
+
         with pytest.raises(FileNotFoundError):
             register_domain_model("nonexistent-domain-xyz")
 
@@ -284,8 +290,10 @@ class TestRunDomainFinetune:
     @patch("finetune.domain_finetune.sample_domain_chunks")
     @patch("rag.domain_registry.get_domain")
     @patch("rag.domain_registry.update_domain")
-    def test_success_path(self, mock_update, mock_get_domain, mock_sample, mock_filter, mock_train, mock_register):
-        from suyven_rag.finetune.domain_finetune import run_domain_finetune, DOMAIN_FT_DIR
+    def test_success_path(
+        self, mock_update, mock_get_domain, mock_sample, mock_filter, mock_train, mock_register
+    ):
+        from suyven_rag.finetune.domain_finetune import DOMAIN_FT_DIR, run_domain_finetune
 
         mock_get_domain.return_value = MagicMock(name="Test Domain")
         mock_sample.return_value = _make_chunks(300)
@@ -308,6 +316,7 @@ class TestRunDomainFinetune:
 
         # Cleanup
         import shutil
+
         shutil.rmtree(DOMAIN_FT_DIR / "test-domain", ignore_errors=True)
 
     @patch("finetune.domain_finetune.sample_domain_chunks")

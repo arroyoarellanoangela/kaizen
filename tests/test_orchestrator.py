@@ -4,7 +4,6 @@ import pytest
 
 from suyven_rag.rag.orchestrator import RoutePlan, plan
 
-
 # ---------------------------------------------------------------------------
 # Mode detection
 # ---------------------------------------------------------------------------
@@ -13,22 +12,28 @@ from suyven_rag.rag.orchestrator import RoutePlan, plan
 class TestModeDetection:
     """Verify deterministic mode classification."""
 
-    @pytest.mark.parametrize("query", [
-        "best AI model for coding",
-        "what is Claude?",
-        "how does RAG work?",
-        "GPU recommendations",
-    ])
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "best AI model for coding",
+            "what is Claude?",
+            "how does RAG work?",
+            "GPU recommendations",
+        ],
+    )
     def test_answer_mode(self, query):
         route = plan(query)
         assert route.mode == "answer"
 
-    @pytest.mark.parametrize("query", [
-        "summarize the architecture of this system",
-        "compare GPT-4 and Gemini in detail",
-        "overview of transformer models",
-        "pros and cons of Ollama vs vLLM",
-    ])
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "summarize the architecture of this system",
+            "compare GPT-4 and Gemini in detail",
+            "overview of transformer models",
+            "pros and cons of Ollama vs vLLM",
+        ],
+    )
     def test_summary_mode(self, query):
         route = plan(query)
         assert route.mode == "summary"
@@ -40,15 +45,18 @@ class TestModeDetection:
         route = plan(long_query)
         assert route.mode == "summary"
 
-    @pytest.mark.parametrize("query", [
-        "def fibonacci(n): how to implement?",
-        "pip install sentence-transformers failing",
-        "SELECT * FROM users WHERE active = 1",
-        "docker compose up not working",
-        "git push origin main rejected",
-        "npm install react-query",
-        "import torch; model.to('cuda')",
-    ])
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "def fibonacci(n): how to implement?",
+            "pip install sentence-transformers failing",
+            "SELECT * FROM users WHERE active = 1",
+            "docker compose up not working",
+            "git push origin main rejected",
+            "npm install react-query",
+            "import torch; model.to('cuda')",
+        ],
+    )
     def test_code_mode(self, query):
         route = plan(query)
         assert route.mode == "code"

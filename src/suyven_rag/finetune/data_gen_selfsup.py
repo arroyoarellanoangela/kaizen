@@ -50,15 +50,17 @@ def load_corpus() -> dict[str, list[dict]]:
             offset=offset,
             include=["documents", "metadatas"],
         )
-        for doc, meta in zip(result["documents"], result["metadatas"]):
+        for doc, meta in zip(result["documents"], result["metadatas"], strict=False):
             source = meta.get("source", "unknown")
             chunk_idx = int(meta.get("chunk_index", "0"))
-            by_source[source].append({
-                "text": doc,
-                "source": source,
-                "category": meta.get("category", ""),
-                "chunk_index": chunk_idx,
-            })
+            by_source[source].append(
+                {
+                    "text": doc,
+                    "source": source,
+                    "category": meta.get("category", ""),
+                    "chunk_index": chunk_idx,
+                }
+            )
 
     # Sort each source's chunks by index for adjacency pairs
     for source in by_source:
@@ -93,13 +95,15 @@ def generate_same_document_pairs(
 
         for _ in range(n_pairs):
             a, b = rng.sample(range(len(chunks)), 2)
-            pairs.append({
-                "query": chunks[a]["text"],
-                "positive": chunks[b]["text"],
-                "source": source,
-                "category": chunks[a]["category"],
-                "strategy": "same_document",
-            })
+            pairs.append(
+                {
+                    "query": chunks[a]["text"],
+                    "positive": chunks[b]["text"],
+                    "source": source,
+                    "category": chunks[a]["category"],
+                    "strategy": "same_document",
+                }
+            )
             if len(pairs) >= max_pairs:
                 return pairs
 
@@ -122,13 +126,15 @@ def generate_adjacent_pairs(
 
     for source, chunks in by_source.items():
         for i in range(len(chunks) - 1):
-            pairs.append({
-                "query": chunks[i]["text"],
-                "positive": chunks[i + 1]["text"],
-                "source": source,
-                "category": chunks[i]["category"],
-                "strategy": "adjacent",
-            })
+            pairs.append(
+                {
+                    "query": chunks[i]["text"],
+                    "positive": chunks[i + 1]["text"],
+                    "source": source,
+                    "category": chunks[i]["category"],
+                    "strategy": "adjacent",
+                }
+            )
 
     rng.shuffle(pairs)
     return pairs[:max_pairs]
@@ -158,13 +164,15 @@ def generate_title_pairs(
         sampled = rng.sample(chunks, min(n, len(chunks)))
 
         for chunk in sampled:
-            pairs.append({
-                "query": title,
-                "positive": chunk["text"],
-                "source": source,
-                "category": chunk["category"],
-                "strategy": "title_as_query",
-            })
+            pairs.append(
+                {
+                    "query": title,
+                    "positive": chunk["text"],
+                    "source": source,
+                    "category": chunk["category"],
+                    "strategy": "title_as_query",
+                }
+            )
 
     rng.shuffle(pairs)
     return pairs[:max_pairs]
@@ -188,7 +196,7 @@ def mine_hard_negatives(
 
     # Build a pool of chunks from all sources with their embeddings
     all_chunks = []
-    for source, chunks in by_source.items():
+    for _source, chunks in by_source.items():
         # Sample to keep pool manageable
         sampled = random.sample(chunks, min(200, len(chunks)))
         all_chunks.extend(sampled)
@@ -198,6 +206,7 @@ def mine_hard_negatives(
 
     # Embed in batches
     import numpy as np
+
     pool_embeds = np.array(embed_batch(pool_texts))
 
     # For each pair, find hard negatives
@@ -205,7 +214,7 @@ def mine_hard_negatives(
     batch_size = 256
 
     for i in range(0, len(pairs), batch_size):
-        batch = pairs[i:i + batch_size]
+        batch = pairs[i : i + batch_size]
         queries = [p["query"] for p in batch]
         query_embeds = np.array(embed_batch(queries))
 
@@ -217,22 +226,29 @@ def mine_hard_negatives(
             # Get top-k similar chunks from DIFFERENT sources
             ranked = np.argsort(sims[j])[::-1]
 
-            for idx in ranked[:top_k * 3]:  # search wider to find enough cross-source
+            for idx in ranked[: top_k * 3]:  # search wider to find enough cross-source
                 candidate = all_chunks[idx]
                 if candidate["source"] != source:
-                    triplets.append({
-                        "query": pair["query"],
-                        "positive": pair["positive"],
-                        "negative": candidate["text"],
-                        "source": source,
-                        "category": pair["category"],
-                        "neg_source": candidate["source"],
-                        "strategy": pair["strategy"] + "_hard_neg",
-                    })
+                    triplets.append(
+                        {
+                            "query": pair["query"],
+                            "positive": pair["positive"],
+                            "negative": candidate["text"],
+                            "source": source,
+                            "category": pair["category"],
+                            "neg_source": candidate["source"],
+                            "strategy": pair["strategy"] + "_hard_neg",
+                        }
+                    )
                     break
 
         if (i + batch_size) % 1000 == 0:
-            logger.info("Hard neg mining: %d/%d done, %d triplets", i + batch_size, len(pairs), len(triplets))
+            logger.info(
+                "Hard neg mining: %d/%d done, %d triplets",
+                i + batch_size,
+                len(pairs),
+                len(triplets),
+            )
 
     logger.info("Mined %d hard negative triplets", len(triplets))
     return triplets[:max_pairs]
@@ -276,7 +292,10 @@ def run(
 
     logger.info(
         "Generated %d unique pairs (same_doc=%d, adjacent=%d, title=%d)",
-        len(all_pairs), len(same_doc), len(adjacent), len(title),
+        len(all_pairs),
+        len(same_doc),
+        len(adjacent),
+        len(title),
     )
 
     # Hard negative mining
@@ -288,12 +307,18 @@ def run(
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w", encoding="utf-8") as f:
         for p in all_pairs:
-            f.write(json.dumps({
-                "query": p["query"],
-                "positive": p["positive"],
-                "source": p["source"],
-                "category": p["category"],
-            }, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "query": p["query"],
+                        "positive": p["positive"],
+                        "source": p["source"],
+                        "category": p["category"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
 
     logger.info("Saved %d pairs to %s", len(all_pairs), output)
 
@@ -302,13 +327,19 @@ def run(
         triplet_path = output.parent / "triplets.jsonl"
         with open(triplet_path, "w", encoding="utf-8") as f:
             for t in triplets:
-                f.write(json.dumps({
-                    "query": t["query"],
-                    "positive": t["positive"],
-                    "negative": t["negative"],
-                    "source": t["source"],
-                    "category": t["category"],
-                }, ensure_ascii=False) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "query": t["query"],
+                            "positive": t["positive"],
+                            "negative": t["negative"],
+                            "source": t["source"],
+                            "category": t["category"],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
         logger.info("Saved %d triplets to %s", len(triplets), triplet_path)
 
     return output

@@ -1,8 +1,6 @@
 """Tests for rag/agents.py — multi-agent pipeline."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from suyven_rag.rag.agents import (
     AgentContext,
@@ -11,16 +9,15 @@ from suyven_rag.rag.agents import (
     ReACTRetrieverAgent,
     RetrieverAgent,
     RouterAgent,
+    _merge_and_dedup,
     assess_quality,
     classify_complexity,
     decompose_query,
     extract_query_entities,
     pick_next_strategy,
     run_agent_pipeline,
-    _merge_and_dedup,
 )
 from suyven_rag.rag.orchestrator import RoutePlan
-
 
 # -----------------------------------------------------------------------
 # Fixtures
@@ -81,10 +78,18 @@ class TestClassifyComplexity:
         assert classify_complexity(q) == "moderate"
 
     def test_complex_multi_question(self):
-        assert classify_complexity("what is RAG? how does it compare vs BM25? and what about hybrid search?") == "complex"
+        assert (
+            classify_complexity(
+                "what is RAG? how does it compare vs BM25? and what about hybrid search?"
+            )
+            == "complex"
+        )
 
     def test_complex_semicolon_comparison(self):
-        assert classify_complexity("compare RAG vs fine-tuning; what are the differences and costs?") == "complex"
+        assert (
+            classify_complexity("compare RAG vs fine-tuning; what are the differences and costs?")
+            == "complex"
+        )
 
 
 # -----------------------------------------------------------------------
@@ -302,7 +307,7 @@ class TestEvaluatorAgent:
         ctx.route = _make_route()
         results = _make_results(5, score=(scores[0] if scores else 2.0))
         if scores:
-            for r, s in zip(results, scores):
+            for r, s in zip(results, scores, strict=False):
                 r["score"] = s
         ctx.results = results
         ctx.reranker_scores = [r["score"] for r in results]
@@ -354,7 +359,9 @@ class TestEvaluatorAgent:
 
     @patch("rag.agents.log_eval")
     def test_strategy_escalation_category_filtered(self, mock_log):
-        ctx = self._ctx_with_results(scores=[-0.8, -0.6, -0.9, -0.7, -0.5], strategy="category_filtered")
+        ctx = self._ctx_with_results(
+            scores=[-0.8, -0.6, -0.9, -0.7, -0.5], strategy="category_filtered"
+        )
         EvaluatorAgent().execute(ctx)
         assert ctx.retry_strategy == "hybrid"
 
@@ -392,7 +399,9 @@ class TestCoordinationLoop:
     @patch("rag.agents.format_context", return_value="ctx")
     @patch("rag.agents.execute_search")
     @patch("rag.agents.plan")
-    def test_single_pass_good_retrieval(self, mock_plan, mock_search, mock_format, mock_chat, mock_log):
+    def test_single_pass_good_retrieval(
+        self, mock_plan, mock_search, mock_format, mock_chat, mock_log
+    ):
         mock_plan.return_value = _make_route()
         mock_search.return_value = _make_results(5)
         mock_chat.return_value = iter(["answer"])
@@ -407,12 +416,14 @@ class TestCoordinationLoop:
     @patch("rag.agents.format_context", return_value="ctx")
     @patch("rag.agents.execute_search")
     @patch("rag.agents.plan")
-    def test_retry_once_then_success(self, mock_plan, mock_search, mock_format, mock_chat, mock_log):
+    def test_retry_once_then_success(
+        self, mock_plan, mock_search, mock_format, mock_chat, mock_log
+    ):
         mock_plan.return_value = _make_route()
         # First attempt: weak results. Second: good results.
         mock_search.side_effect = [
             _make_results(5, score=-0.8),  # weak
-            _make_results(5, score=2.0),   # good
+            _make_results(5, score=2.0),  # good
         ]
         mock_chat.return_value = iter(["answer"])
 
@@ -439,7 +450,9 @@ class TestCoordinationLoop:
     @patch("rag.agents.format_context", return_value="ctx")
     @patch("rag.agents.execute_search")
     @patch("rag.agents.plan")
-    def test_trace_records_all_steps(self, mock_plan, mock_search, mock_format, mock_chat, mock_log):
+    def test_trace_records_all_steps(
+        self, mock_plan, mock_search, mock_format, mock_chat, mock_log
+    ):
         mock_plan.return_value = _make_route()
         mock_search.return_value = _make_results(5)
         mock_chat.return_value = iter(["answer"])
@@ -547,7 +560,7 @@ class TestReACTRetrieverAgent:
         # First call (semantic): weak. Subsequent calls: return good results.
         mock_search.side_effect = [
             _make_results(5, score=-0.8),  # semantic: weak
-            _make_results(3, score=1.5),   # entity search: good
+            _make_results(3, score=1.5),  # entity search: good
         ]
         ctx = _make_ctx(
             query="How does AWS Lambda handle cold starts?",
@@ -656,7 +669,9 @@ class TestReACTCoordinationLoop:
     @patch("rag.agents.format_context", return_value="ctx")
     @patch("rag.agents.execute_search")
     @patch("rag.agents.plan")
-    def test_react_pipeline_single_pass(self, mock_plan, mock_search, mock_format, mock_chat, mock_log):
+    def test_react_pipeline_single_pass(
+        self, mock_plan, mock_search, mock_format, mock_chat, mock_log
+    ):
         mock_plan.return_value = _make_route()
         mock_search.return_value = _make_results(5)
         mock_chat.return_value = iter(["answer"])
@@ -673,7 +688,9 @@ class TestReACTCoordinationLoop:
     @patch("rag.agents.format_context", return_value="ctx")
     @patch("rag.agents.execute_search")
     @patch("rag.agents.plan")
-    def test_react_pipeline_complex_query(self, mock_plan, mock_search, mock_format, mock_chat, mock_log):
+    def test_react_pipeline_complex_query(
+        self, mock_plan, mock_search, mock_format, mock_chat, mock_log
+    ):
         mock_plan.return_value = _make_route()
         mock_search.return_value = _make_results(5)
         mock_chat.return_value = iter(["detailed answer"])

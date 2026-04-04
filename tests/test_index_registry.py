@@ -1,8 +1,6 @@
 """Tests for rag.index_registry — registry contents, routing, interface."""
 
-import pytest
-
-from suyven_rag.rag.index_registry import list_indexes, route_to_index, _registry, IndexInfo
+from suyven_rag.rag.index_registry import IndexInfo, _registry, list_indexes, route_to_index
 
 
 class TestListIndexes:

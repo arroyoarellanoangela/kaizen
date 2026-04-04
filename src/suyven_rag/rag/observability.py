@@ -5,6 +5,7 @@ FastAPI middleware for request tracing, and simple in-memory counters
 exposed at /metrics in Prometheus text format.
 """
 
+import contextvars
 import json
 import logging
 import time
@@ -12,7 +13,6 @@ from collections import defaultdict
 from threading import Lock
 from typing import Any
 from uuid import uuid4
-
 
 # ---------------------------------------------------------------------------
 # Structured JSON log formatter
@@ -37,8 +37,16 @@ class JSONFormatter(logging.Formatter):
         if hasattr(record, "request_id"):
             entry["request_id"] = record.request_id
         # Propagate any extra fields set via `extra={...}`
-        for key in ("method", "path", "status", "duration_ms", "query_id",
-                     "api_key_hint", "client_ip", "error"):
+        for key in (
+            "method",
+            "path",
+            "status",
+            "duration_ms",
+            "query_id",
+            "api_key_hint",
+            "client_ip",
+            "error",
+        ):
             if hasattr(record, key):
                 entry[key] = getattr(record, key)
         # Exception info
@@ -64,17 +72,13 @@ def configure_logging(json_logs: bool = True, level: str = "INFO") -> None:
     if json_logs:
         handler.setFormatter(JSONFormatter())
     else:
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s %(name)s %(levelname)s  %(message)s"
-        ))
+        handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s  %(message)s"))
     root.addHandler(handler)
 
 
 # ---------------------------------------------------------------------------
 # Request-scoped context (trace ID propagation)
 # ---------------------------------------------------------------------------
-
-import contextvars
 
 _request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
 
@@ -207,14 +211,22 @@ def create_request_middleware(app_metrics: Metrics | None = None):
             status = response.status_code
 
             # Metrics
-            m.inc("http_requests_total", labels={"method": method, "path": path, "status": str(status)})
-            m.observe("http_request_duration_ms", duration_ms, labels={"method": method, "path": path})
+            m.inc(
+                "http_requests_total",
+                labels={"method": method, "path": path, "status": str(status)},
+            )
+            m.observe(
+                "http_request_duration_ms", duration_ms, labels={"method": method, "path": path}
+            )
 
             # Structured log
             logger = logging.getLogger("suyven.http")
             logger.info(
                 "%s %s -> %d (%.0fms)",
-                method, path, status, duration_ms,
+                method,
+                path,
+                status,
+                duration_ms,
                 extra={
                     "method": method,
                     "path": path,
@@ -229,7 +241,9 @@ def create_request_middleware(app_metrics: Metrics | None = None):
         except Exception:
             duration_ms = (time.time() - t0) * 1000
             m.inc("http_requests_total", labels={"method": method, "path": path, "status": "500"})
-            m.observe("http_request_duration_ms", duration_ms, labels={"method": method, "path": path})
+            m.observe(
+                "http_request_duration_ms", duration_ms, labels={"method": method, "path": path}
+            )
             raise
 
     return middleware

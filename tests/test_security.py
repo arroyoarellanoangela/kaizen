@@ -17,7 +17,6 @@ from suyven_rag.rag.security import (
     validate_top_k,
 )
 
-
 # -----------------------------------------------------------------------
 # Input validation
 # -----------------------------------------------------------------------
@@ -259,14 +258,18 @@ class TestRequireApiKey:
         """When no API_KEYS configured, returns 'dev'."""
         with patch("rag.security.AUTH_ENABLED", False):
             from unittest.mock import MagicMock
+
             req = MagicMock()
             result = require_api_key(req)
             assert result == "dev"
 
     def test_missing_header_raises(self):
-        with patch("rag.security.AUTH_ENABLED", True), \
-             patch("rag.security.API_KEYS", {"valid-key-123"}):
+        with (
+            patch("rag.security.AUTH_ENABLED", True),
+            patch("rag.security.API_KEYS", {"valid-key-123"}),
+        ):
             from unittest.mock import MagicMock
+
             req = MagicMock()
             req.headers.get.return_value = ""
             with pytest.raises(HTTPException) as exc:
@@ -274,9 +277,12 @@ class TestRequireApiKey:
             assert exc.value.status_code == 401
 
     def test_invalid_key_raises(self):
-        with patch("rag.security.AUTH_ENABLED", True), \
-             patch("rag.security.API_KEYS", {"valid-key-123"}):
+        with (
+            patch("rag.security.AUTH_ENABLED", True),
+            patch("rag.security.API_KEYS", {"valid-key-123"}),
+        ):
             from unittest.mock import MagicMock
+
             req = MagicMock()
             req.headers.get.return_value = "wrong-key"
             with pytest.raises(HTTPException) as exc:
@@ -284,9 +290,12 @@ class TestRequireApiKey:
             assert exc.value.status_code == 401
 
     def test_valid_key_passes(self):
-        with patch("rag.security.AUTH_ENABLED", True), \
-             patch("rag.security.API_KEYS", {"valid-key-123"}):
+        with (
+            patch("rag.security.AUTH_ENABLED", True),
+            patch("rag.security.API_KEYS", {"valid-key-123"}),
+        ):
             from unittest.mock import MagicMock
+
             req = MagicMock()
             req.headers.get.return_value = "valid-key-123"
             result = require_api_key(req)

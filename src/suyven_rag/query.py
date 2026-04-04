@@ -47,7 +47,7 @@ def main() -> None:
     if "--cat" in args:
         idx = args.index("--cat")
         category = args[idx + 1]
-        args = args[:idx] + args[idx + 2:]
+        args = args[:idx] + args[idx + 2 :]
 
     if args:
         run_query(" ".join(args), category=category)

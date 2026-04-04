@@ -22,7 +22,6 @@ import logging
 import random
 import re
 import time
-from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -36,10 +35,11 @@ DOMAIN_FT_DIR = BASE_DIR / "data" / "finetune" / "domains"
 @dataclass
 class DomainFinetuneConfig:
     """Config for domain-specific fine-tuning."""
+
     slug: str
     # Data gen
-    min_pairs: int = 200            # minimum pairs to proceed with training
-    target_pairs: int = 2000        # target number of training pairs
+    min_pairs: int = 200  # minimum pairs to proceed with training
+    target_pairs: int = 2000  # target number of training pairs
     min_reranker_score: float = 0.2  # quality gate for self-supervised pairs
     # LoRA
     lora_rank: int = 8
@@ -49,7 +49,7 @@ class DomainFinetuneConfig:
     # Training
     epochs: int = 3
     learning_rate: float = 2e-5
-    batch_size: int = 32           # smaller batches for domain data (less data)
+    batch_size: int = 32  # smaller batches for domain data (less data)
     gradient_accumulation_steps: int = 2
     warmup_ratio: float = 0.1
     max_grad_norm: float = 1.0
@@ -62,8 +62,9 @@ class DomainFinetuneConfig:
 @dataclass
 class DomainFinetuneResult:
     """Result of a domain fine-tune run."""
+
     slug: str
-    status: str                    # "success", "insufficient_data", "error"
+    status: str  # "success", "insufficient_data", "error"
     pairs_generated: int = 0
     pairs_after_filter: int = 0
     train_pairs: int = 0
@@ -100,12 +101,14 @@ def sample_domain_chunks(slug: str, max_chunks: int = 5000) -> list[dict]:
             offset=offset,
             include=["documents", "metadatas"],
         )
-        for doc, meta in zip(result["documents"], result["metadatas"]):
-            all_docs.append({
-                "text": doc,
-                "source": meta.get("source", ""),
-                "category": meta.get("category", ""),
-            })
+        for doc, meta in zip(result["documents"], result["metadatas"], strict=False):
+            all_docs.append(
+                {
+                    "text": doc,
+                    "source": meta.get("source", ""),
+                    "category": meta.get("category", ""),
+                }
+            )
 
     logger.info("[%s] Loaded %d chunks from domain collection", slug, len(all_docs))
     return all_docs
@@ -118,7 +121,7 @@ def sample_domain_chunks(slug: str, max_chunks: int = 5000) -> list[dict]:
 
 def _extract_first_sentence(text: str) -> str | None:
     """Extract first meaningful sentence from a chunk."""
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     for s in sentences:
         s = s.strip()
         if len(s) < 20 or len(s) > 200:
@@ -130,7 +133,9 @@ def _extract_first_sentence(text: str) -> str | None:
     return None
 
 
-def _generate_first_sentence_pairs(chunks: list[dict], max_pairs: int, seed: int = 42) -> list[dict]:
+def _generate_first_sentence_pairs(
+    chunks: list[dict], max_pairs: int, seed: int = 42
+) -> list[dict]:
     """Opening sentence as pseudo-query, rest of chunk as positive."""
     rng = random.Random(seed)
     pairs = []
@@ -141,16 +146,18 @@ def _generate_first_sentence_pairs(chunks: list[dict], max_pairs: int, seed: int
         sentence = _extract_first_sentence(chunk["text"])
         if not sentence:
             continue
-        remaining = chunk["text"][len(sentence):].strip()
+        remaining = chunk["text"][len(sentence) :].strip()
         if len(remaining) < 50:
             continue
-        pairs.append({
-            "query": sentence,
-            "positive": remaining,
-            "source": chunk["source"],
-            "category": chunk["category"],
-            "strategy": "first_sentence",
-        })
+        pairs.append(
+            {
+                "query": sentence,
+                "positive": remaining,
+                "source": chunk["source"],
+                "category": chunk["category"],
+                "strategy": "first_sentence",
+            }
+        )
         if len(pairs) >= max_pairs:
             break
     return pairs
@@ -159,9 +166,9 @@ def _generate_first_sentence_pairs(chunks: list[dict], max_pairs: int, seed: int
 def _generate_definition_pairs(chunks: list[dict], max_pairs: int, seed: int = 42) -> list[dict]:
     """Extract definitions and headings as pseudo-queries."""
     patterns = [
-        r'^([A-Z][A-Za-z\s]{5,40})\s+(?:is|are|refers to|means|es|son|se refiere a)\s+',
-        r'^(?:What is|How to|Why does|Que es|Como)\s+.{10,80}',
-        r'^#+\s*(.{5,60})',
+        r"^([A-Z][A-Za-z\s]{5,40})\s+(?:is|are|refers to|means|es|son|se refiere a)\s+",
+        r"^(?:What is|How to|Why does|Que es|Como)\s+.{10,80}",
+        r"^#+\s*(.{5,60})",
     ]
     rng = random.Random(seed)
     pairs = []
@@ -173,15 +180,17 @@ def _generate_definition_pairs(chunks: list[dict], max_pairs: int, seed: int = 4
         for pattern in patterns:
             m = re.match(pattern, text, re.MULTILINE)
             if m:
-                query = m.group(0).strip().rstrip(':').strip()
+                query = m.group(0).strip().rstrip(":").strip()
                 if 10 <= len(query) <= 100:
-                    pairs.append({
-                        "query": query,
-                        "positive": text,
-                        "source": chunk["source"],
-                        "category": chunk["category"],
-                        "strategy": "definition",
-                    })
+                    pairs.append(
+                        {
+                            "query": query,
+                            "positive": text,
+                            "source": chunk["source"],
+                            "category": chunk["category"],
+                            "strategy": "definition",
+                        }
+                    )
                     break
         if len(pairs) >= max_pairs:
             break
@@ -197,33 +206,37 @@ def _generate_question_pairs(chunks: list[dict], max_pairs: int, seed: int = 42)
 
     for chunk in shuffled:
         text = chunk["text"].strip()
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
 
         for s in sentences[:3]:
             s = s.strip()
             if len(s) < 30 or len(s) > 150:
                 continue
-            m = re.match(r'^([A-Z][A-Za-z\s\-]{3,40})\s+(?:is|are|es|son)\s+', s)
+            m = re.match(r"^([A-Z][A-Za-z\s\-]{3,40})\s+(?:is|are|es|son)\s+", s)
             if m:
                 subject = m.group(1).strip()
-                pairs.append({
-                    "query": f"What is {subject}?",
-                    "positive": text,
-                    "source": chunk["source"],
-                    "category": chunk["category"],
-                    "strategy": "question_reformat",
-                })
+                pairs.append(
+                    {
+                        "query": f"What is {subject}?",
+                        "positive": text,
+                        "source": chunk["source"],
+                        "category": chunk["category"],
+                        "strategy": "question_reformat",
+                    }
+                )
                 break
-            m = re.match(r'^To\s+(.{10,60}),', s)
+            m = re.match(r"^To\s+(.{10,60}),", s)
             if m:
                 action = m.group(1).strip()
-                pairs.append({
-                    "query": f"How to {action}?",
-                    "positive": text,
-                    "source": chunk["source"],
-                    "category": chunk["category"],
-                    "strategy": "question_reformat",
-                })
+                pairs.append(
+                    {
+                        "query": f"How to {action}?",
+                        "positive": text,
+                        "source": chunk["source"],
+                        "category": chunk["category"],
+                        "strategy": "question_reformat",
+                    }
+                )
                 break
         if len(pairs) >= max_pairs:
             break
@@ -243,8 +256,13 @@ def generate_domain_pairs(
     questions = _generate_question_pairs(chunks, max_pairs=target, seed=seed)
 
     all_candidates = first_sent + definitions + questions
-    logger.info("Generated %d candidate pairs (first_sent=%d, def=%d, question=%d)",
-                len(all_candidates), len(first_sent), len(definitions), len(questions))
+    logger.info(
+        "Generated %d candidate pairs (first_sent=%d, def=%d, question=%d)",
+        len(all_candidates),
+        len(first_sent),
+        len(definitions),
+        len(questions),
+    )
 
     if not all_candidates:
         return []
@@ -278,18 +296,22 @@ def _filter_with_reranker(
 
     scored = []
     for i in range(0, len(pairs), batch_size):
-        batch = pairs[i:i + batch_size]
+        batch = pairs[i : i + batch_size]
         inputs = [(p["query"], p["positive"]) for p in batch]
         scores = reranker.predict(inputs, show_progress_bar=False)
-        for pair, score in zip(batch, scores):
+        for pair, score in zip(batch, scores, strict=False):
             pair["reranker_score"] = float(score)
             scored.append(pair)
 
     kept = [p for p in scored if p["reranker_score"] >= min_score]
     kept.sort(key=lambda x: x["reranker_score"], reverse=True)
 
-    logger.info("Reranker filter: %d/%d kept (%.1f%%)",
-                len(kept), len(scored), 100 * len(kept) / max(len(scored), 1))
+    logger.info(
+        "Reranker filter: %d/%d kept (%.1f%%)",
+        len(kept),
+        len(scored),
+        100 * len(kept) / max(len(scored), 1),
+    )
     return kept
 
 
@@ -329,8 +351,13 @@ def train_domain_model(
         loss_plot_path=DOMAIN_FT_DIR / slug / "loss_curve.png",
     )
 
-    logger.info("[%s] Starting LoRA training (rank=%d, epochs=%d, lr=%s)",
-                slug, config.lora_rank, config.epochs, config.learning_rate)
+    logger.info(
+        "[%s] Starting LoRA training (rank=%d, epochs=%d, lr=%s)",
+        slug,
+        config.lora_rank,
+        config.epochs,
+        config.learning_rate,
+    )
 
     summary = train(train_config)
     return summary
@@ -386,6 +413,7 @@ def run_domain_finetune(
     try:
         # Verify domain exists
         from suyven_rag.rag.domain_registry import get_domain
+
         domain = get_domain(slug)
         logger.info("[%s] Starting fine-tune pipeline for domain: %s", slug, domain.name)
 
@@ -407,7 +435,9 @@ def run_domain_finetune(
 
         if len(pairs) < config.min_pairs:
             result.status = "insufficient_data"
-            result.error = f"Only {len(pairs)} quality pairs generated, need at least {config.min_pairs}"
+            result.error = (
+                f"Only {len(pairs)} quality pairs generated, need at least {config.min_pairs}"
+            )
             logger.warning("[%s] %s", slug, result.error)
             return result
 
@@ -420,12 +450,18 @@ def run_domain_finetune(
 
         with open(pairs_path, "w", encoding="utf-8") as f:
             for p in pairs:
-                f.write(json.dumps({
-                    "query": p["query"],
-                    "positive": p["positive"],
-                    "source": p["source"],
-                    "category": p["category"],
-                }, ensure_ascii=False) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "query": p["query"],
+                            "positive": p["positive"],
+                            "source": p["source"],
+                            "category": p["category"],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
         logger.info("[%s] Saved %d training pairs to %s", slug, len(pairs), pairs_path)
 
         # Step 4: Train
@@ -445,11 +481,13 @@ def run_domain_finetune(
 
         # Update domain config with model path
         from suyven_rag.rag.domain_registry import update_domain
+
         update_domain(slug, chunk_count=len(chunks))
 
         logger.info(
             "[%s] Fine-tune complete: %d pairs, train_loss=%.4f, eval_loss=%.4f, time=%.1fs",
-            slug, len(pairs),
+            slug,
+            len(pairs),
             result.final_train_loss or 0,
             result.final_eval_loss or 0,
             result.training_time_s,

@@ -12,7 +12,6 @@ import logging
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from statistics import mean as _mean
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -21,11 +20,11 @@ logger = logging.getLogger(__name__)
 # Thresholds (internal tuning knobs, not user config)
 # ---------------------------------------------------------------------------
 
-RERANKER_FLOOR = -2.0        # logit below which ALL results = retrieval failure
-RERANKER_WEAK_MEAN = -0.5    # logit below which mean = weak retrieval
-LATENCY_SPIKE_S = 10.0       # total seconds before flagging
-CONTAMINATION_CATS = 3       # distinct categories = suspect on non-summary
-MAX_ANSWER_LENGTH = 2000     # chars before suspecting wrong routing
+RERANKER_FLOOR = -2.0  # logit below which ALL results = retrieval failure
+RERANKER_WEAK_MEAN = -0.5  # logit below which mean = weak retrieval
+LATENCY_SPIKE_S = 10.0  # total seconds before flagging
+CONTAMINATION_CATS = 3  # distinct categories = suspect on non-summary
+MAX_ANSWER_LENGTH = 2000  # chars before suspecting wrong routing
 
 # ---------------------------------------------------------------------------
 # Eval record

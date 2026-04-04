@@ -106,7 +106,7 @@ def inject_lora(
         param.requires_grad_(False)
 
     injected = 0
-    for module_name, module in list(model.named_modules()):
+    for _module_name, module in list(model.named_modules()):
         for target in target_modules:
             if not hasattr(module, target):
                 continue
@@ -122,7 +122,10 @@ def inject_lora(
     total = sum(p.numel() for p in model.parameters())
     logger.info(
         "LoRA injected: %d adapters, %d trainable / %d total params (%.2f%%)",
-        injected, trainable, total, 100 * trainable / total if total else 0,
+        injected,
+        trainable,
+        total,
+        100 * trainable / total if total else 0,
     )
 
     return injected
@@ -157,9 +160,7 @@ def merge_lora(model: nn.Module) -> None:
 
             with torch.no_grad():
                 # W += scaling * B @ A
-                child.original.weight.add_(
-                    child.scaling * (child.lora_B @ child.lora_A)
-                )
+                child.original.weight.add_(child.scaling * (child.lora_B @ child.lora_A))
 
             # Replace LoRALinear with the merged original
             module._modules[name] = child.original

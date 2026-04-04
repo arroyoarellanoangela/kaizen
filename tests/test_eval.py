@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 
 from suyven_rag.rag.eval import (
-    CONTAMINATION_CATS,
     LATENCY_SPIKE_S,
     RERANKER_FLOOR,
     RERANKER_WEAK_MEAN,
@@ -18,7 +17,6 @@ from suyven_rag.rag.eval import (
     log_eval,
     new_query_id,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -66,9 +64,15 @@ class TestComputeFlags:
         assert compute_flags(record) == []
 
     def test_empty_retrieval(self):
-        record = _make_record(num_results=0, reranker_scores=[], bi_encoder_scores=[],
-                              max_reranker_score=None, min_reranker_score=None,
-                              mean_reranker_score=None, source_categories=[])
+        record = _make_record(
+            num_results=0,
+            reranker_scores=[],
+            bi_encoder_scores=[],
+            max_reranker_score=None,
+            min_reranker_score=None,
+            mean_reranker_score=None,
+            source_categories=[],
+        )
         flags = compute_flags(record)
         assert "empty_retrieval" in flags
         # Should short-circuit: no other flags
@@ -76,16 +80,20 @@ class TestComputeFlags:
 
     def test_retrieval_failure(self):
         bad_scores = [RERANKER_FLOOR - 0.1] * 5
-        record = _make_record(reranker_scores=bad_scores,
-                              mean_reranker_score=RERANKER_FLOOR - 0.1,
-                              min_reranker_score=RERANKER_FLOOR - 0.1,
-                              max_reranker_score=RERANKER_FLOOR - 0.1)
+        record = _make_record(
+            reranker_scores=bad_scores,
+            mean_reranker_score=RERANKER_FLOOR - 0.1,
+            min_reranker_score=RERANKER_FLOOR - 0.1,
+            max_reranker_score=RERANKER_FLOOR - 0.1,
+        )
         flags = compute_flags(record)
         assert "retrieval_failure" in flags
 
     def test_weak_retrieval(self):
-        record = _make_record(mean_reranker_score=RERANKER_WEAK_MEAN - 0.1,
-                              reranker_scores=[RERANKER_WEAK_MEAN - 0.1] * 5)
+        record = _make_record(
+            mean_reranker_score=RERANKER_WEAK_MEAN - 0.1,
+            reranker_scores=[RERANKER_WEAK_MEAN - 0.1] * 5,
+        )
         flags = compute_flags(record)
         assert "weak_retrieval" in flags
 
@@ -138,29 +146,35 @@ class TestComputeFlags:
 
 
 class TestDetectInsufficient:
-    @pytest.mark.parametrize("text", [
-        "The context is insufficient to answer this question.",
-        "There is not enough information in the provided context.",
-        "No relevant context found for this query.",
-        "I cannot answer from the provided context.",
-        "I cannot compare from the provided context.",
-        "I cannot determine from the provided context.",
-        "No information is provided about this topic.",
-        "No tengo suficiente contexto para responder.",
-        "La informacion insuficiente no permite responder.",
-        "La informaci\u00f3n insuficiente no permite responder.",
-        "Context insufficient to determine the answer.",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "The context is insufficient to answer this question.",
+            "There is not enough information in the provided context.",
+            "No relevant context found for this query.",
+            "I cannot answer from the provided context.",
+            "I cannot compare from the provided context.",
+            "I cannot determine from the provided context.",
+            "No information is provided about this topic.",
+            "No tengo suficiente contexto para responder.",
+            "La informacion insuficiente no permite responder.",
+            "La informaci\u00f3n insuficiente no permite responder.",
+            "Context insufficient to determine the answer.",
+        ],
+    )
     def test_positive(self, text):
         assert detect_insufficient(text) is True
 
-    @pytest.mark.parametrize("text", [
-        "Claude is an AI model developed by Anthropic.",
-        "The transformer architecture uses self-attention.",
-        "Here is a comparison of GPT-4 and Gemini.",
-        "RAG works by retrieving relevant context first.",
-        "",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Claude is an AI model developed by Anthropic.",
+            "The transformer architecture uses self-attention.",
+            "Here is a comparison of GPT-4 and Gemini.",
+            "RAG works by retrieving relevant context first.",
+            "",
+        ],
+    )
     def test_negative(self, text):
         assert detect_insufficient(text) is False
 
@@ -175,8 +189,7 @@ class TestLogEval:
         record = _make_record()
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test_log.jsonl"
-            with patch("rag.eval._LOG_FILE", log_file), \
-                 patch("rag.eval._LOG_DIR", Path(tmpdir)):
+            with patch("rag.eval._LOG_FILE", log_file), patch("rag.eval._LOG_DIR", Path(tmpdir)):
                 log_eval(record)
 
             lines = log_file.read_text(encoding="utf-8").strip().split("\n")
@@ -189,8 +202,7 @@ class TestLogEval:
     def test_appends_multiple(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test_log.jsonl"
-            with patch("rag.eval._LOG_FILE", log_file), \
-                 patch("rag.eval._LOG_DIR", Path(tmpdir)):
+            with patch("rag.eval._LOG_FILE", log_file), patch("rag.eval._LOG_DIR", Path(tmpdir)):
                 log_eval(_make_record(query="first"))
                 log_eval(_make_record(query="second"))
 

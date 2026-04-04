@@ -98,7 +98,12 @@ class ExperimentTracker:
         with open(self.run_dir / "evals.json", "w") as f:
             json.dump(self.evals, f, indent=2)
 
-        logger.info("Experiment saved: %s (%d steps, %d evals)", self.run_dir, len(self.steps), len(self.evals))
+        logger.info(
+            "Experiment saved: %s (%d steps, %d evals)",
+            self.run_dir,
+            len(self.steps),
+            len(self.evals),
+        )
         return self.run_dir
 
 
@@ -146,12 +151,14 @@ def compare_experiments(run_ids: list[str]) -> list[dict]:
     for rid in run_ids:
         exp = get_experiment(rid)
         if exp:
-            results.append({
-                "run_id": exp["metadata"]["run_id"],
-                "name": exp["metadata"]["name"],
-                "config": exp.get("config", {}),
-                "final_eval_loss": exp["metadata"].get("final_eval_loss"),
-                "best_eval_loss": exp["metadata"].get("best_eval_loss"),
-                "total_steps": exp["metadata"].get("total_steps"),
-            })
+            results.append(
+                {
+                    "run_id": exp["metadata"]["run_id"],
+                    "name": exp["metadata"]["name"],
+                    "config": exp.get("config", {}),
+                    "final_eval_loss": exp["metadata"].get("final_eval_loss"),
+                    "best_eval_loss": exp["metadata"].get("best_eval_loss"),
+                    "total_steps": exp["metadata"].get("total_steps"),
+                }
+            )
     return results

@@ -52,15 +52,17 @@ def load_corpus() -> dict[str, list[dict]]:
             offset=offset,
             include=["documents", "metadatas"],
         )
-        for doc, meta in zip(result["documents"], result["metadatas"]):
+        for doc, meta in zip(result["documents"], result["metadatas"], strict=False):
             source = meta.get("source", "unknown")
             chunk_idx = int(meta.get("chunk_index", "0"))
-            by_source[source].append({
-                "text": doc,
-                "source": source,
-                "category": meta.get("category", ""),
-                "chunk_index": chunk_idx,
-            })
+            by_source[source].append(
+                {
+                    "text": doc,
+                    "source": source,
+                    "category": meta.get("category", ""),
+                    "chunk_index": chunk_idx,
+                }
+            )
 
     for source in by_source:
         by_source[source].sort(key=lambda x: x["chunk_index"])
@@ -73,10 +75,11 @@ def load_corpus() -> dict[str, list[dict]]:
 # Strategy 1: First sentence as pseudo-query
 # ---------------------------------------------------------------------------
 
+
 def extract_first_sentence(text: str) -> str | None:
     """Extract the first meaningful sentence from a chunk."""
     # Split on sentence boundaries
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     for s in sentences:
         s = s.strip()
         # Skip very short or code-like lines
@@ -108,17 +111,19 @@ def generate_first_sentence_pairs(
             continue
         # The query is the first sentence, the positive is the full chunk
         # (but we remove the first sentence from the positive to avoid trivial matching)
-        remaining = chunk["text"][len(sentence):].strip()
+        remaining = chunk["text"][len(sentence) :].strip()
         if len(remaining) < 50:
             continue
 
-        pairs.append({
-            "query": sentence,
-            "positive": remaining,
-            "source": chunk["source"],
-            "category": chunk["category"],
-            "strategy": "first_sentence",
-        })
+        pairs.append(
+            {
+                "query": sentence,
+                "positive": remaining,
+                "source": chunk["source"],
+                "category": chunk["category"],
+                "strategy": "first_sentence",
+            }
+        )
         if len(pairs) >= max_pairs:
             break
 
@@ -131,9 +136,9 @@ def generate_first_sentence_pairs(
 # ---------------------------------------------------------------------------
 
 DEFINITION_PATTERNS = [
-    r'^([A-Z][A-Za-z\s]{5,40})\s+(?:is|are|refers to|means)\s+',  # "X is ..."
-    r'^(?:What is|How to|Why does|When to)\s+.{10,80}',  # Question-like openings
-    r'^#+\s*(.{5,60})',  # Markdown headings
+    r"^([A-Z][A-Za-z\s]{5,40})\s+(?:is|are|refers to|means)\s+",  # "X is ..."
+    r"^(?:What is|How to|Why does|When to)\s+.{10,80}",  # Question-like openings
+    r"^#+\s*(.{5,60})",  # Markdown headings
 ]
 
 
@@ -154,15 +159,17 @@ def generate_definition_pairs(
         for pattern in DEFINITION_PATTERNS:
             m = re.match(pattern, text, re.MULTILINE)
             if m:
-                query = m.group(0).strip().rstrip(':').strip()
+                query = m.group(0).strip().rstrip(":").strip()
                 if 10 <= len(query) <= 100:
-                    pairs.append({
-                        "query": query,
-                        "positive": text,
-                        "source": chunk["source"],
-                        "category": chunk["category"],
-                        "strategy": "definition",
-                    })
+                    pairs.append(
+                        {
+                            "query": query,
+                            "positive": text,
+                            "source": chunk["source"],
+                            "category": chunk["category"],
+                            "strategy": "definition",
+                        }
+                    )
                     break
         if len(pairs) >= max_pairs:
             break
@@ -174,6 +181,7 @@ def generate_definition_pairs(
 # ---------------------------------------------------------------------------
 # Strategy 3: Question reformulation from chunk content
 # ---------------------------------------------------------------------------
+
 
 def generate_question_pairs(
     by_source: dict[str, list[dict]],
@@ -194,7 +202,7 @@ def generate_question_pairs(
 
     for chunk in all_chunks:
         text = chunk["text"].strip()
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
 
         for s in sentences[:3]:  # Only look at first 3 sentences
             s = s.strip()
@@ -202,29 +210,33 @@ def generate_question_pairs(
                 continue
 
             # "X is/are Y" -> "What is X?"
-            m = re.match(r'^([A-Z][A-Za-z\s\-]{3,40})\s+(?:is|are)\s+', s)
+            m = re.match(r"^([A-Z][A-Za-z\s\-]{3,40})\s+(?:is|are)\s+", s)
             if m:
                 subject = m.group(1).strip()
-                pairs.append({
-                    "query": f"What is {subject}?",
-                    "positive": text,
-                    "source": chunk["source"],
-                    "category": chunk["category"],
-                    "strategy": "question_reformat",
-                })
+                pairs.append(
+                    {
+                        "query": f"What is {subject}?",
+                        "positive": text,
+                        "source": chunk["source"],
+                        "category": chunk["category"],
+                        "strategy": "question_reformat",
+                    }
+                )
                 break
 
             # "To X, you need Y" -> "How to X?"
-            m = re.match(r'^To\s+(.{10,60}),', s)
+            m = re.match(r"^To\s+(.{10,60}),", s)
             if m:
                 action = m.group(1).strip()
-                pairs.append({
-                    "query": f"How to {action}?",
-                    "positive": text,
-                    "source": chunk["source"],
-                    "category": chunk["category"],
-                    "strategy": "question_reformat",
-                })
+                pairs.append(
+                    {
+                        "query": f"How to {action}?",
+                        "positive": text,
+                        "source": chunk["source"],
+                        "category": chunk["category"],
+                        "strategy": "question_reformat",
+                    }
+                )
                 break
 
         if len(pairs) >= max_pairs:
@@ -237,6 +249,7 @@ def generate_question_pairs(
 # ---------------------------------------------------------------------------
 # Cross-encoder filtering
 # ---------------------------------------------------------------------------
+
 
 def filter_with_reranker(
     pairs: list[dict],
@@ -256,11 +269,11 @@ def filter_with_reranker(
 
     scored = []
     for i in range(0, len(pairs), batch_size):
-        batch = pairs[i:i + batch_size]
+        batch = pairs[i : i + batch_size]
         inputs = [(p["query"], p["positive"]) for p in batch]
         scores = reranker.predict(inputs, show_progress_bar=False)
 
-        for pair, score in zip(batch, scores):
+        for pair, score in zip(batch, scores, strict=False):
             pair["reranker_score"] = float(score)
             scored.append(pair)
 
@@ -276,8 +289,11 @@ def filter_with_reranker(
     avg_kept = np.mean([p["reranker_score"] for p in kept]) if kept else 0
     logger.info(
         "Reranker filter: %d/%d kept (%.1f%%), avg_score=%.3f, avg_kept=%.3f",
-        len(kept), len(scored), 100 * len(kept) / max(len(scored), 1),
-        avg_score, avg_kept,
+        len(kept),
+        len(scored),
+        100 * len(kept) / max(len(scored), 1),
+        avg_score,
+        avg_kept,
     )
 
     return kept
@@ -287,12 +303,13 @@ def filter_with_reranker(
 # Load existing Groq pairs
 # ---------------------------------------------------------------------------
 
+
 def load_groq_pairs(path: Path = GROQ_PAIRS) -> list[dict]:
     """Load existing LLM-generated pairs (highest quality anchor)."""
     if not path.exists():
         return []
     pairs = []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -308,6 +325,7 @@ def load_groq_pairs(path: Path = GROQ_PAIRS) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def run(
     target_pairs: int = 3000,
@@ -333,10 +351,11 @@ def run(
     groq = load_groq_pairs()
 
     # Combine: Groq first (high quality), then filtered self-supervised
-    combined = groq + filtered[:target_pairs - len(groq)]
+    combined = groq + filtered[: target_pairs - len(groq)]
 
     # Deduplicate
     import hashlib
+
     seen = set()
     unique = []
     for p in combined:
@@ -351,12 +370,18 @@ def run(
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w", encoding="utf-8") as f:
         for p in unique:
-            f.write(json.dumps({
-                "query": p["query"],
-                "positive": p["positive"],
-                "source": p["source"],
-                "category": p["category"],
-            }, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "query": p["query"],
+                        "positive": p["positive"],
+                        "source": p["source"],
+                        "category": p["category"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
 
     # Stats
     strategy_counts = defaultdict(int)
@@ -372,9 +397,13 @@ def run(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="V2 training data generation with cross-encoder filtering")
+    parser = argparse.ArgumentParser(
+        description="V2 training data generation with cross-encoder filtering"
+    )
     parser.add_argument("--target", type=int, default=3000, help="Target number of pairs")
-    parser.add_argument("--min-score", type=float, default=0.3, help="Min reranker score to keep a pair")
+    parser.add_argument(
+        "--min-score", type=float, default=0.3, help="Min reranker score to keep a pair"
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()

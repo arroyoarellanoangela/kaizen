@@ -2,6 +2,7 @@
 
 import json
 import random
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -54,14 +55,22 @@ def main():
     print()
     print("Metric                         Base    FineTuned    Delta")
     print("-" * 60)
-    print(f"Avg cos(q, positive)         {np.mean(base_pos):.4f}     {np.mean(ft_pos):.4f}   {np.mean(ft_pos)-np.mean(base_pos):+.4f}")
-    print(f"Avg cos(q, negative)         {np.mean(base_neg):.4f}     {np.mean(ft_neg):.4f}   {np.mean(ft_neg)-np.mean(base_neg):+.4f}")
-    print(f"Avg margin (pos - neg)       {np.mean(base_margin):.4f}     {np.mean(ft_margin):.4f}   {np.mean(ft_margin)-np.mean(base_margin):+.4f}")
-    print(f"Accuracy (pos > neg)         {base_acc:.1f}%     {ft_acc:.1f}%   {ft_acc-base_acc:+.1f}%")
+    print(
+        f"Avg cos(q, positive)         {np.mean(base_pos):.4f}     {np.mean(ft_pos):.4f}   {np.mean(ft_pos) - np.mean(base_pos):+.4f}"
+    )
+    print(
+        f"Avg cos(q, negative)         {np.mean(base_neg):.4f}     {np.mean(ft_neg):.4f}   {np.mean(ft_neg) - np.mean(base_neg):+.4f}"
+    )
+    print(
+        f"Avg margin (pos - neg)       {np.mean(base_margin):.4f}     {np.mean(ft_margin):.4f}   {np.mean(ft_margin) - np.mean(base_margin):+.4f}"
+    )
+    print(
+        f"Accuracy (pos > neg)         {base_acc:.1f}%     {ft_acc:.1f}%   {ft_acc - base_acc:+.1f}%"
+    )
 
     m = np.mean(base_margin)
     if m > 0.001:
-        print(f"\nMargin improvement: {((np.mean(ft_margin)/m)-1)*100:+.1f}%")
+        print(f"\nMargin improvement: {((np.mean(ft_margin) / m) - 1) * 100:+.1f}%")
 
 
 if __name__ == "__main__":

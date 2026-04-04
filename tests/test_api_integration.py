@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -33,6 +32,7 @@ def client():
         p.start()
 
     from api import app
+
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
@@ -120,7 +120,12 @@ class TestQueryEndpoint:
         ctx.attempt = 1
         ctx.max_attempts = 3
         ctx.results = [
-            {"category": "ml", "source": "doc1.md", "score": 2.5, "text": "Transformers use attention."},
+            {
+                "category": "ml",
+                "source": "doc1.md",
+                "score": 2.5,
+                "text": "Transformers use attention.",
+            },
         ]
         ctx.route = MagicMock(mode="answer", reason="short query")
         ctx.agent_trace = [{"agent": "router", "action": "route"}]

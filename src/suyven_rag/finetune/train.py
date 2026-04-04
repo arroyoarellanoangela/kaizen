@@ -156,6 +156,7 @@ def gpu_snapshot() -> dict | None:
     """Quick GPU metrics snapshot for training log."""
     try:
         from suyven_rag.rag.monitoring import gpu_metrics
+
         return gpu_metrics()
     except Exception:
         return None
@@ -182,7 +183,7 @@ def train(config: TrainConfig, triplets_path: Path | None = None) -> dict:
     model.to(device)
 
     # 2. Inject LoRA
-    n_adapters = inject_lora(
+    inject_lora(
         model,
         rank=config.lora_rank,
         alpha=config.lora_alpha,
@@ -238,7 +239,11 @@ def train(config: TrainConfig, triplets_path: Path | None = None) -> dict:
 
     logger.info(
         "Training: %d epochs, %d steps/epoch, %d total steps, warmup=%d, amp=%s",
-        config.epochs, steps_per_epoch, total_steps, warmup_steps, use_amp,
+        config.epochs,
+        steps_per_epoch,
+        total_steps,
+        warmup_steps,
+        use_amp,
     )
 
     # 7. Training loop
@@ -263,16 +268,24 @@ def train(config: TrainConfig, triplets_path: Path | None = None) -> dict:
             # --- InfoNCE loss on pairs ---
             with torch.amp.autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 q_emb = encode_texts(model, tokenizer, list(queries), config.max_seq_length, device)
-                p_emb = encode_texts(model, tokenizer, list(positives), config.max_seq_length, device)
+                p_emb = encode_texts(
+                    model, tokenizer, list(positives), config.max_seq_length, device
+                )
                 loss = compute_mnrl_loss(q_emb, p_emb, config.temperature)
 
                 # --- Triplet loss on hard negatives (interleaved) ---
                 if triplet_iter is not None:
                     try:
                         t_queries, t_positives, t_negatives = next(triplet_iter)
-                        tq_emb = encode_texts(model, tokenizer, list(t_queries), config.max_seq_length, device)
-                        tp_emb = encode_texts(model, tokenizer, list(t_positives), config.max_seq_length, device)
-                        tn_emb = encode_texts(model, tokenizer, list(t_negatives), config.max_seq_length, device)
+                        tq_emb = encode_texts(
+                            model, tokenizer, list(t_queries), config.max_seq_length, device
+                        )
+                        tp_emb = encode_texts(
+                            model, tokenizer, list(t_positives), config.max_seq_length, device
+                        )
+                        tn_emb = encode_texts(
+                            model, tokenizer, list(t_negatives), config.max_seq_length, device
+                        )
                         t_loss = compute_triplet_loss(tq_emb, tp_emb, tn_emb)
                         loss = loss + t_loss  # combined loss
                     except StopIteration:
@@ -314,7 +327,10 @@ def train(config: TrainConfig, triplets_path: Path | None = None) -> dict:
                         history["gpu"].append({"step": global_step, **gpu})
                     logger.info(
                         "epoch=%d step=%d loss=%.4f lr=%.2e vram=%.1fGB",
-                        epoch + 1, global_step, avg_loss, lr,
+                        epoch + 1,
+                        global_step,
+                        avg_loss,
+                        lr,
                         gpu["vram_used_gb"] if gpu else 0,
                     )
 
@@ -401,6 +417,7 @@ def plot_loss_curves(history: dict, output_path: Path) -> None:
     """Save training loss curve as PNG."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -448,7 +465,9 @@ def main():
     parser.add_argument("--rank", type=int, default=8)
     parser.add_argument("--alpha", type=int, default=16)
     parser.add_argument("--data", type=Path, default=None, help="Path to training data JSONL")
-    parser.add_argument("--triplets", type=Path, default=None, help="Path to triplets JSONL for hard negatives")
+    parser.add_argument(
+        "--triplets", type=Path, default=None, help="Path to triplets JSONL for hard negatives"
+    )
     parser.add_argument("--accum-steps", type=int, default=4, help="Gradient accumulation steps")
     args = parser.parse_args()
 

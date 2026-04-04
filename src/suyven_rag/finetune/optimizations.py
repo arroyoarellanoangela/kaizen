@@ -10,10 +10,10 @@ These are applied transparently to the existing training loop.
 """
 
 import logging
-from typing import Iterator
+from collections.abc import Iterator
 
 import torch
-from torch.utils.data import DataLoader, Sampler
+from torch.utils.data import Sampler
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # 1. Length-sorted sampler (Unsloth-style dynamic batching)
 # ---------------------------------------------------------------------------
+
 
 class LengthBucketSampler(Sampler):
     """Sort samples by sequence length, then batch.
@@ -53,7 +54,7 @@ class LengthBucketSampler(Sampler):
         # Create batches of similar-length sequences
         batches = []
         for i in range(0, len(sorted_indices), self.batch_size):
-            batches.append(sorted_indices[i:i + self.batch_size])
+            batches.append(sorted_indices[i : i + self.batch_size])
 
         # Shuffle batch order (not within batches) to avoid length bias
         if self.shuffle_buckets:
@@ -87,6 +88,7 @@ def compute_sequence_lengths(
 # 2. Collate with minimal padding (Unsloth-style)
 # ---------------------------------------------------------------------------
 
+
 def collate_minimal_padding(batch: list[dict], tokenizer, max_length: int = 256) -> dict:
     """Tokenize and pad to max length in batch (not global max_length).
 
@@ -101,7 +103,7 @@ def collate_minimal_padding(batch: list[dict], tokenizer, max_length: int = 256)
 
     q_enc = tokenizer(
         queries,
-        padding=True,         # Pad to longest in batch
+        padding=True,  # Pad to longest in batch
         truncation=True,
         max_length=max_length,
         return_tensors="pt",
@@ -126,6 +128,7 @@ def collate_minimal_padding(batch: list[dict], tokenizer, max_length: int = 256)
 # 3. Gradient checkpointing wrapper
 # ---------------------------------------------------------------------------
 
+
 def enable_gradient_checkpointing(model: torch.nn.Module) -> None:
     """Enable gradient checkpointing to trade compute for memory.
 
@@ -142,6 +145,7 @@ def enable_gradient_checkpointing(model: torch.nn.Module) -> None:
 # ---------------------------------------------------------------------------
 # 4. CUDA memory optimization
 # ---------------------------------------------------------------------------
+
 
 def optimize_cuda_memory() -> None:
     """Apply CUDA memory optimizations."""
@@ -169,6 +173,7 @@ def optimize_cuda_memory() -> None:
 # ---------------------------------------------------------------------------
 # 5. Mixed-precision context manager
 # ---------------------------------------------------------------------------
+
 
 class AMPContext:
     """Automatic mixed precision with GradScaler — production-grade wrapper.
@@ -207,6 +212,7 @@ class AMPContext:
 # ---------------------------------------------------------------------------
 # 6. Training stats tracker
 # ---------------------------------------------------------------------------
+
 
 class GPUStats:
     """Real-time GPU statistics during training."""

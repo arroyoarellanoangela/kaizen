@@ -4,6 +4,7 @@ Supports both the static "default" index (main Suyven knowledge base)
 and dynamic domain-specific indexes created via domain_registry.
 """
 
+import contextlib
 import logging
 from dataclasses import dataclass
 
@@ -39,7 +40,7 @@ class RegistryEmbedFn(chromadb.EmbeddingFunction):
 class IndexInfo:
     name: str
     collection_name: str
-    embed_model: str       # key in model_registry
+    embed_model: str  # key in model_registry
     description: str = ""
 
 
@@ -59,7 +60,9 @@ _registry: dict[str, IndexInfo] = {
 }
 
 
-def register_index(name: str, collection_name: str, embed_model: str = "default_embed", description: str = "") -> None:
+def register_index(
+    name: str, collection_name: str, embed_model: str = "default_embed", description: str = ""
+) -> None:
     """Register a new index (used by domain_registry to add domain indexes)."""
     _registry[name] = IndexInfo(
         name=name,
@@ -87,8 +90,9 @@ def get_index(name: str = "default") -> chromadb.Collection:
     if info is None:
         raise KeyError(f"Index '{name}' not found in registry.")
 
-    logger.info("Opening index: %s (collection=%s, embed=%s)",
-                name, info.collection_name, info.embed_model)
+    logger.info(
+        "Opening index: %s (collection=%s, embed=%s)", name, info.collection_name, info.embed_model
+    )
 
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
     col = client.get_or_create_collection(
@@ -109,8 +113,9 @@ def _try_register_domain_index(name: str) -> None:
     try:
         from .domain_registry import get_domain
         from .model_registry import has_embed_model
+
         # name format: "domain_<slug>" -> slug
-        slug = name[len("domain_"):]
+        slug = name[len("domain_") :]
         domain = get_domain(slug)
 
         # Use domain-specific embed model if fine-tuned, else default
@@ -134,10 +139,8 @@ def reset_index(name: str = "default") -> chromadb.Collection:
         raise KeyError(f"Index '{name}' not found in registry.")
 
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    try:
+    with contextlib.suppress(Exception):
         client.delete_collection(info.collection_name)
-    except Exception:
-        pass
 
     _collections.pop(name, None)
     return get_index(name)

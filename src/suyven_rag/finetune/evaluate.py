@@ -9,7 +9,6 @@ Usage:
 """
 
 import argparse
-import json
 import logging
 import subprocess
 import sys
@@ -26,8 +25,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 def run_bench(label: str, extra_args: list[str] | None = None) -> Path:
     """Run bench.py and return the report path."""
     cmd = [
-        sys.executable, "bench.py",
-        "--agents", "--label", label,
+        sys.executable,
+        "bench.py",
+        "--agents",
+        "--label",
+        label,
     ]
     if extra_args:
         cmd.extend(extra_args)
@@ -41,7 +43,9 @@ def run_bench(label: str, extra_args: list[str] | None = None) -> Path:
 
     # Find the report file
     report_dir = BASE_DIR / "data" / "eval" / "bench"
-    reports = sorted(report_dir.glob(f"*{label}*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    reports = sorted(
+        report_dir.glob(f"*{label}*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
     if not reports:
         raise FileNotFoundError(f"No report found for label '{label}'")
 
@@ -51,8 +55,11 @@ def run_bench(label: str, extra_args: list[str] | None = None) -> Path:
 def run_compare(report_a: Path, report_b: Path) -> None:
     """Run bench.py --compare."""
     cmd = [
-        sys.executable, "bench.py",
-        "--compare", str(report_a), str(report_b),
+        sys.executable,
+        "bench.py",
+        "--compare",
+        str(report_a),
+        str(report_b),
     ]
     logger.info("Running: %s", " ".join(cmd))
     subprocess.run(cmd, cwd=str(BASE_DIR))
@@ -60,10 +67,10 @@ def run_compare(report_a: Path, report_b: Path) -> None:
 
 def swap_embed_model(checkpoint_path: Path) -> None:
     """Register the fine-tuned model in the model registry at runtime."""
-    from suyven_rag.rag.model_registry import ModelInfo, _embed_models, _registry
-
-    from sentence_transformers import SentenceTransformer
     import torch
+    from sentence_transformers import SentenceTransformer
+
+    from suyven_rag.rag.model_registry import ModelInfo, _embed_models, _registry
 
     logger.info("Loading fine-tuned model from %s", checkpoint_path)
 
@@ -113,6 +120,7 @@ def evaluate(config: TrainConfig, checkpoint: Path | None = None) -> None:
     # Note: bench.py runs as a subprocess, so we can't swap models in-process.
     # Instead, we set an env var that the model registry can pick up.
     import os
+
     os.environ["FINETUNED_EMBED_PATH"] = str(ckpt)
 
     logger.info("=== Phase 2: Fine-tuned benchmark ===")

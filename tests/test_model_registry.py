@@ -1,8 +1,12 @@
 """Tests for rag.model_registry — registry contents and interface."""
 
-import pytest
-
-from suyven_rag.rag.model_registry import ModelInfo, has_embed_model, list_models, register_embed_model, _registry
+from suyven_rag.rag.model_registry import (
+    ModelInfo,
+    _registry,
+    has_embed_model,
+    list_models,
+    register_embed_model,
+)
 
 
 class TestListModels:
@@ -25,7 +29,9 @@ class TestListModels:
             assert "type" in info, f"{name} missing type"
             assert "precision" in info, f"{name} missing precision"
             assert info["type"] in ("embed", "reranker"), f"{name} has bad type: {info['type']}"
-            assert info["precision"] in ("fp16", "fp32"), f"{name} has bad precision: {info['precision']}"
+            assert info["precision"] in ("fp16", "fp32"), (
+                f"{name} has bad precision: {info['precision']}"
+            )
 
 
 class TestRegistryContents:
@@ -64,6 +70,6 @@ class TestRegisterEmbedModel:
 
     def test_list_models_includes_loaded_field(self):
         result = list_models()
-        for name, info in result.items():
+        for _name, info in result.items():
             assert "loaded" in info
             assert isinstance(info["loaded"], bool)
